@@ -1,0 +1,361 @@
+.dashboard {
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Orbitron', sans-serif;
+}
+
+/* TITULO */
+.titulo-nave {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 55px;
+  letter-spacing: 6px;
+  color: #ffe81f;
+  text-shadow:
+    0 0 10px #ffe81f,
+    0 0 30px #ffaa00,
+    0 0 60px rgba(255,200,0,0.6);
+  animation: glowTitle 3s infinite alternate;
+}
+
+@keyframes glowTitle {
+  from { opacity: 0.8; }
+  to { opacity: 1; }
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  height: calc(100vh - 120px);
+
+  margin-top: 120px;
+  padding: 0 40px 40px 40px;
+
+  gap: 30px;
+}
+/* PANELES */
+.panel {
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(0,255,255,0.6);
+  border-radius: 15px;
+  padding: 20px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow-y: auto;
+
+  box-shadow:
+    0 0 20px rgba(0,255,255,0.4),
+    inset 0 0 30px rgba(0,255,255,0.1);
+
+  backdrop-filter: blur(4px);
+}
+
+/* CENTRO */
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.nave {
+  width: 220px;
+  filter: drop-shadow(0 0 25px cyan);
+  animation: floatShip 4s ease-in-out infinite;
+}
+
+@keyframes floatShip {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+/* TITULOS SECCION */
+.section-title {
+  margin-top: 20px;
+  color: #00f7ff;
+  border-left: 3px solid #00f7ff;
+  padding-left: 10px;
+}
+
+/* ESTADO */
+.estado {
+  padding: 12px;
+  text-align: center;
+  font-weight: bold;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  letter-spacing: 2px;
+  animation: pulseEstado 2s infinite;
+}
+
+@keyframes pulseEstado {
+  0% { opacity: 0.9; }
+  50% { opacity: 1; }
+  100% { opacity: 0.9; }
+}
+
+.estado.operativa {
+  background: linear-gradient(90deg, #00aa00, #00ff88);
+  box-shadow: 0 0 20px #00ff88;
+}
+
+.estado.alerta {
+  background: orange;
+}
+
+.estado.emergencia {
+  background: red;
+}
+
+/* BARRAS */
+.status-bar {
+  margin-bottom: 15px;
+}
+
+.bar-background {
+  height: 12px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: 0.6s;
+  box-shadow: 0 0 10px currentColor;
+  position: relative;
+}
+
+/* EFECTO ENERGÍA */
+.bar-fill::after {
+  content: "";
+  position: absolute;
+  width: 40px;
+  height: 100%;
+  background: rgba(255,255,255,0.4);
+  animation: energyMove 2s linear infinite;
+}
+
+@keyframes energyMove {
+  from { left: -40px; }
+  to { left: 100%; }
+}
+
+/* PROXIMIDAD RADAR */
+.proximidad {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid cyan;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 0 10px cyan;
+  animation: radarPulse 2s infinite;
+}
+
+@keyframes radarPulse {
+  0% { box-shadow: 0 0 10px cyan; }
+  50% { box-shadow: 0 0 25px cyan; }
+  100% { box-shadow: 0 0 10px cyan; }
+}
+
+/* LEDS */
+.led {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin: 5px;
+  display: inline-block;
+  opacity: 0.3;
+  transition: 0.3s;
+}
+
+.led.active {
+  opacity: 1;
+  animation: ledBlink 1.5s infinite;
+  box-shadow: 0 0 20px currentColor;
+}
+
+@keyframes ledBlink {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.led.green { background: #00ff88; }
+.led.yellow { background: yellow; }
+.led.red { background: red; }
+.led.blue { background: #00aaff; }
+
+/* BOTONES */
+.btn {
+  margin: 6px;
+  padding: 8px 14px;
+  background: black;
+  color: cyan;
+  border: 1px solid cyan;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.btn:hover {
+  background: cyan;
+  color: black;
+  box-shadow: 0 0 15px cyan;
+}
+
+/* ESTADISTICAS */
+.stat-item {
+  margin-bottom: 8px;
+  padding: 6px;
+  border-bottom: 1px solid rgba(0,255,255,0.3);
+  font-size: 14px;
+}
+
+/* ===== ANIMACIONES DE LA NAVE ===== */
+
+/* MOVIMIENTO LATERAL */
+.nave.mover {
+  animation: moverNave 0.8s ease;
+}
+
+@keyframes moverNave {
+  0% { transform: translateX(0px); }
+  25% { transform: translateX(-15px); }
+  50% { transform: translateX(15px); }
+  75% { transform: translateX(-10px); }
+  100% { transform: translateX(0px); }
+}
+
+/* EFECTO DISPARO */
+.nave.disparo {
+  animation: disparoFX 0.6s ease;
+}
+
+@keyframes disparoFX {
+  0% { transform: scale(1); filter: drop-shadow(0 0 25px cyan); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 50px red); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 25px cyan); }
+}
+
+/* EFECTO CAMUFLAJE */
+.nave.camuflaje {
+  animation: camuflajeFX 0.8s ease;
+}
+
+@keyframes camuflajeFX {
+  0% { opacity: 1; filter: drop-shadow(0 0 25px cyan); }
+  50% { opacity: 0.4; filter: drop-shadow(0 0 40px blue); }
+  100% { opacity: 1; filter: drop-shadow(0 0 25px cyan); }
+}
+
+.panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel::-webkit-scrollbar-thumb {
+  background: cyan;
+  border-radius: 10px;
+}
+
+.panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== NOMBRE NAVE G-2 ===== */
+
+.nombre-nave {
+  position: absolute;
+  top: 40px;  
+  left: 52%;
+  transform: translateX(-50%);
+
+  font-size: 70px;
+  font-weight: 900;
+  letter-spacing: 10px;
+
+  color: #00f7ff;
+
+  text-shadow:
+    0 0 10px #00f7ff,
+    0 0 25px #00f7ff,
+    0 0 50px rgba(0,255,255,0.6),
+    0 0 80px rgba(0,255,255,0.4);
+
+  animation: hologramaPulse 3s infinite alternate,
+             hologramaFloat 5s ease-in-out infinite;
+}
+
+/* Brillo pulsante */
+@keyframes hologramaPulse {
+  from {
+    opacity: 0.8;
+    text-shadow:
+      0 0 10px #00f7ff,
+      0 0 25px #00f7ff;
+  }
+  to {
+    opacity: 1;
+    text-shadow:
+      0 0 20px #00f7ff,
+      0 0 40px #00ffff,
+      0 0 70px rgba(0,255,255,0.8);
+  }
+}
+
+/* Flotación suave */
+@keyframes hologramaFloat {
+  0% { transform: translate(-50%, 0px); }
+  50% { transform: translate(-50%, -8px); }
+  100% { transform: translate(-50%, 0px); }
+}
+
+/* ===== SENSOR CRITICO ===== */
+.sensor-critico {
+  animation: sensorAlerta 1s infinite;
+}
+
+@keyframes sensorAlerta {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); box-shadow: 0 0 20px red; }
+  100% { transform: scale(1); }
+}
+
+/* ===== ESTADO GENERAL ALERTA ===== */
+.alerta-general {
+  animation: estadoPeligro 1s infinite;
+}
+
+@keyframes estadoPeligro {
+  0% { box-shadow: 0 0 15px red; }
+  50% { box-shadow: 0 0 40px red; }
+  100% { box-shadow: 0 0 15px red; }
+}
+
+/* ===== MENSAJE ENVIADO ===== */
+.mensaje-enviado {
+  animation: mensajeFlash 0.8s ease;
+}
+
+@keyframes mensajeFlash {
+  0% { background: cyan; }
+  100% { background: white; }
+}
+
+/* ===== ANGULO ACTIVO ===== */
+.angulo-activo {
+  animation: torretaGlow 0.5s ease;
+}
+
+@keyframes torretaGlow {
+  0% { box-shadow: 0 0 0px cyan; }
+  50% { box-shadow: 0 0 25px cyan; }
+  100% { box-shadow: 0 0 0px cyan; }
+}
