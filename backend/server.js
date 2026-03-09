@@ -11,7 +11,7 @@ const statsRoutes = require("./routes/stats")
 const app = express()
 
 app.use(cors())
-app.use(express.json())   // MUY IMPORTANTE
+app.use(express.json())   
 
 connectMongo()
 
