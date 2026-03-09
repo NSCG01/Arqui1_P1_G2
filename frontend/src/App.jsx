@@ -9,7 +9,7 @@ import {
   normalizeStats,
   sendCommand,
   sendMessage,
-} from "./services/api";
+} from "./services/api .js";
 
 export default function App() {
   const [gas, setGas] = useState(0);
