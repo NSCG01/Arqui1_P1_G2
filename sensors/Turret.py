@@ -1,107 +1,136 @@
 import RPi.GPIO as GPIO
+import threading
 import time
 
-GPIO.setmode(GPIO.BCM)
+class Turret:
 
-# Motor pins
-IN1 = 20
-IN2 = 21
-IN3 = 25
-IN4 = 8
+    # ---------------- CONFIG ----------------
+    PINS = [6, 13, 19, 26]
 
-motor_pins = [IN1, IN2, IN3, IN4]
+    BUTTON_LEFT = 20
+    BUTTON_RIGHT = 21
+    BUTTON_FIRE = 16
 
-# Botones
-BTN_LEFT = 5
-BTN_RIGHT = 6
-BTN_FIRE = 22
+    LASER = 12
+    BUZZER = 25
 
-# Actuadores
-LED_FIRE = 0
-BUZZER = 10
+    # Stepper
+    STEPS_PER_REV = 2048
+    DEG_PER_STEP = 360.0 / STEPS_PER_REV
 
-# Configuración GPIO
-for pin in motor_pins:
-    GPIO.setup(pin, GPIO.OUT)
-    GPIO.output(pin, 0)
+    SEQ = [
+        [1,0,0,0],
+        [1,1,0,0],
+        [0,1,0,0],
+        [0,1,1,0],
+        [0,0,1,0],
+        [0,0,1,1],
+        [0,0,0,1],
+        [1,0,0,1]
+    ]
 
-GPIO.setup(BTN_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(BTN_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(BTN_FIRE, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    def __init__(self):
 
-GPIO.setup(LED_FIRE, GPIO.OUT)
-GPIO.setup(BUZZER, GPIO.OUT)
+        # ---------------- GPIO ----------------
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
 
-# Secuencia del motor (half-step)
-sequence = [
-    [1,0,0,0],
-    [1,1,0,0],
-    [0,1,0,0],
-    [0,1,1,0],
-    [0,0,1,0],
-    [0,0,1,1],
-    [0,0,0,1],
-    [1,0,0,1]
-]
+        for p in self.PINS:
+            GPIO.setup(p, GPIO.OUT)
+            GPIO.output(p, 0)
 
-step_delay = 0.002
-steps_per_rev = 512  # aprox para 28BYJ-48
+        GPIO.setup(self.BUTTON_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.BUTTON_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.BUTTON_FIRE, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-current_angle = 0
+        GPIO.setup(self.LASER, GPIO.OUT)
+        GPIO.setup(self.BUZZER, GPIO.OUT)
 
-def step_motor(direction=1, steps=1):
-    global current_angle
-    for _ in range(steps):
-        for step in (sequence if direction == 1 else reversed(sequence)):
-            for i in range(4):
-                GPIO.output(motor_pins[i], step[i])
-            time.sleep(step_delay)
+        # ---------------- ESTADO ----------------
+        self.stop_event = threading.Event()
 
-    # actualizar ángulo aproximado
-    current_angle += direction * (360 / steps_per_rev * steps)
-    current_angle %= 360
+        self.current_step = 0
+        self.current_angle = 0.0
+        self.target_angle = 0.0
 
-def go_home():
-    global current_angle
-    steps_to_home = int((current_angle / 360) * steps_per_rev)
-    step_motor(direction=-1, steps=steps_to_home)
-    current_angle = 0
+        self.step_index = 0
+        self.moving = False
 
-def rotate_to_angle(target_angle):
-    global current_angle
-    diff = target_angle - current_angle
+    # ---------------- STEPPER ----------------
+    def step_once(self, direction):
 
-    steps = int(abs(diff) / 360 * steps_per_rev)
+        self.step_index = (self.step_index + direction) % len(self.SEQ)
 
-    if diff > 0:
-        step_motor(direction=1, steps=steps)
-    else:
-        step_motor(direction=-1, steps=steps)
+        for pin, val in zip(self.PINS, self.SEQ[self.step_index]):
+            GPIO.output(pin, val)
 
-def fire():
-    GPIO.output(LED_FIRE, 1)
-    
-    for _ in range(3):
-        GPIO.output(BUZZER, 1)
-        time.sleep(0.1)
-        GPIO.output(BUZZER, 0)
-        time.sleep(0.1)
+        self.current_step += direction
+        self.current_angle = (self.current_step * self.DEG_PER_STEP) % 360
 
-    time.sleep(0.3)
-    GPIO.output(LED_FIRE, 0)
+    def motor_loop(self):
+        if self.stop_event.is_set():
+            return
 
-try:
-    while True:
-        if GPIO.input(BTN_LEFT):
-            step_motor(direction=-1, steps=5)
+        diff = (self.target_angle - self.current_angle + 540) % 360 - 180
 
-        if GPIO.input(BTN_RIGHT):
-            step_motor(direction=1, steps=5)
+        if abs(diff) > self.DEG_PER_STEP:
+            self.moving = True
+            direction = 1 if diff > 0 else -1
+            self.step_once(direction)
+        else:
+            self.moving = False
+            self.release_motor()
 
-        if GPIO.input(BTN_FIRE):
-            fire()
+        threading.Timer(0.003, self.motor_loop).start()
 
-        time.sleep(0.05)
+    def release_motor(self):
+        for p in self.PINS:
+            GPIO.output(p, 0)
 
-except KeyboardInterrupt:
-    GPIO.cleanup()
+    # ---------------- BOTONES ----------------
+    def button_loop(self):
+        if self.stop_event.is_set():
+            return
+
+        if GPIO.input(self.BUTTON_LEFT) == 0:
+            self.target_angle = (self.target_angle - 5) % 360
+
+        if GPIO.input(self.BUTTON_RIGHT) == 0:
+            self.target_angle = (self.target_angle + 5) % 360
+
+        if GPIO.input(self.BUTTON_FIRE) == 0:
+            self.fire()
+
+        threading.Timer(0.1, self.button_loop).start()
+
+    # ---------------- DISPARO ----------------
+    def fire(self):
+        print(" FIRE!")
+
+        GPIO.output(self.LASER, True)
+
+        def buzz():
+            GPIO.output(self.BUZZER, True)
+            threading.Timer(0.05, lambda: GPIO.output(self.BUZZER, False)).start()
+
+        for i in range(5):
+            threading.Timer(i * 0.08, buzz).start()
+
+        threading.Timer(0.4, lambda: GPIO.output(self.LASER, False)).start()
+
+    # ---------------- ESTADO PARA LCD ----------------
+    def get_turret_status(self):
+        return f"{round(self.current_angle,1)}°"
+
+    # ---------------- START ----------------
+    def start(self):
+        print(" Turret iniciado")
+        self.motor_loop()
+        self.button_loop()
+
+    # ---------------- STOP ----------------
+    def stop(self):
+        print("Turret detenido")
+        self.stop_event.set()
+        self.release_motor()
+        GPIO.cleanup()

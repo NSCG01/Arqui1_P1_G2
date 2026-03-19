@@ -1,208 +1,180 @@
 import RPi.GPIO as GPIO
+import threading
 import time
+import json
 import paho.mqtt.client as mqtt
-from pymongo import MongoClient
-from datetime import datetime
 
-GPIO.setmode(GPIO.BCM)
+class Disguise:
 
-# ------------------------
-# TCS3200
-# ------------------------
-S0, S1, S2, S3, OUT = 5, 6, 13, 19, 26
+    # ---------------- CONFIG ----------------
+    S0, S1, S2, S3, OUT = 6, 13, 19, 26, 21
+    R_PIN, G_PIN, B_PIN = 2, 3, 10
+    BLUE_LED = 12
 
-GPIO.setup(S0, GPIO.OUT)
-GPIO.setup(S1, GPIO.OUT)
-GPIO.setup(S2, GPIO.OUT)
-GPIO.setup(S3, GPIO.OUT)
-GPIO.setup(OUT, GPIO.IN)
+    MQTT_BROKER = "localhost"
+    MQTT_PORT = 1883
 
-GPIO.output(S0, GPIO.HIGH)
-GPIO.output(S1, GPIO.LOW)
+    TOPIC_SENSOR = "nave/sensores/color"
 
-# ------------------------
-# LED RGB (PARALELO)
-# ------------------------
-LED_R = 18
-LED_G = 12
-LED_B = 16
+    SEQUENCE_TARGET = ["RED", "YELLOW", "BLUE"]
 
-GPIO.setup(LED_R, GPIO.OUT)
-GPIO.setup(LED_G, GPIO.OUT)
-GPIO.setup(LED_B, GPIO.OUT)
+    def __init__(self):
 
-# CAMBIA ESTO SEGÚN TU LED
-COMMON_ANODE = False  # True si es ánodo común
+        # ---------------- GPIO ----------------
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
 
-# ------------------------
-# MQTT + Mongo
-# ------------------------
-client = mqtt.Client()
-client.connect("localhost", 1883, 60)
+        GPIO.setup([self.S0, self.S1, self.S2, self.S3], GPIO.OUT)
+        GPIO.setup(self.OUT, GPIO.IN)
 
-mongo = MongoClient("mongodb://localhost:27017/")
-db = mongo["nave"]
-events = db["events"]
+        GPIO.setup(self.R_PIN, GPIO.OUT)
+        GPIO.setup(self.G_PIN, GPIO.OUT)
+        GPIO.setup(self.B_PIN, GPIO.OUT)
+        GPIO.setup(self.BLUE_LED, GPIO.OUT)
 
-# ------------------------
-# VARIABLES
-# ------------------------
-sequence_detected = []
-correct_sequence = ["RED", "YELLOW", "BLUE"]
-camouflage_active = False
+        # Escala frecuencia
+        GPIO.output(self.S0, True)
+        GPIO.output(self.S1, False)
 
-# ------------------------
-# CONTROL LED
-# ------------------------
-def set_rgb(r, g, b):
+        # ---------------- MQTT ----------------
+        self.client = mqtt.Client()
+        self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
+        self.client.loop_start()
 
-    if COMMON_ANODE:
-        GPIO.output(LED_R, not r)
-        GPIO.output(LED_G, not g)
-        GPIO.output(LED_B, not b)
-    else:
-        GPIO.output(LED_R, r)
-        GPIO.output(LED_G, g)
-        GPIO.output(LED_B, b)
+        # ---------------- ESTADO ----------------
+        self.detected_sequence = []
+        self.camouflage_active = False
+        self.stop_event = threading.Event()
 
+    # ---------------- TIMESTAMP ----------------
+    def get_timestamp(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S")
 
-def set_color(color):
+    # ---------------- RGB LED ----------------
+    def set_color(self, r, g, b):
+        GPIO.output(self.R_PIN, r)
+        GPIO.output(self.G_PIN, g)
+        GPIO.output(self.B_PIN, b)
 
-    if color == "RED":
-        set_rgb(1,0,0)
+    # ---------------- CAMUFLAJE ----------------
+    def activate_camouflage(self):
+        self.camouflage_active = True
+        GPIO.output(self.BLUE_LED, True)
+        self.sequence_loop()
 
-    elif color == "YELLOW":
-        set_rgb(1,1,0)
+    def deactivate_camouflage(self):
+        self.camouflage_active = False
+        self.set_color(0, 0, 0)
+        GPIO.output(self.BLUE_LED, False)
 
-    elif color == "BLUE":
-        set_rgb(0,0,1)
+    def sequence_loop(self):
+        if not self.camouflage_active or self.stop_event.is_set():
+            return
 
-    else:
-        set_rgb(0,0,0)
+        colors = [
+            (1,0,0),  # rojo
+            (1,1,0),  # amarillo
+            (0,0,1)   # azul
+        ]
 
-# ------------------------
-# SENSOR (frecuencia real)
-# ------------------------
-def measure_frequency():
+        def play(index=0):
+            if not self.camouflage_active or self.stop_event.is_set():
+                self.set_color(0,0,0)
+                return
 
-    start = time.time()
-    count = 0
+            self.set_color(*colors[index])
+            threading.Timer(1.0, lambda: play((index+1)%3)).start()
 
-    while time.time() - start < 0.1:
-        if GPIO.input(OUT) == GPIO.LOW:
-            count += 1
-            while GPIO.input(OUT) == GPIO.LOW:
-                pass
+        play()
 
-    return count
+    # ---------------- MEDICIÓN ----------------
+    def measure_channel(self, s2, s3):
+        GPIO.output(self.S2, s2)
+        GPIO.output(self.S3, s3)
 
+        start = time.time()
+        count = 0
 
-def read_color():
+        while time.time() - start < 0.1:
+            if GPIO.input(self.OUT) == 0:
+                count += 1
+                while GPIO.input(self.OUT) == 0:
+                    pass
 
-    GPIO.output(S2, GPIO.LOW)
-    GPIO.output(S3, GPIO.LOW)
-    red = measure_frequency()
+        return count
 
-    GPIO.output(S2, GPIO.HIGH)
-    GPIO.output(S3, GPIO.HIGH)
-    green = measure_frequency()
-
-    GPIO.output(S2, GPIO.LOW)
-    GPIO.output(S3, GPIO.HIGH)
-    blue = measure_frequency()
-
-    if red < green and red < blue:
-        return "RED"
-    elif green < red and green < blue:
-        return "GREEN"
-    elif blue < red and blue < green:
-        return "BLUE"
-    elif red < 200 and green < 200:
-        return "YELLOW"
-    else:
+    def classify_color(self, r, g, b):
+        if r > g and r > b:
+            return "RED"
+        elif g > r and g > b:
+            return "GREEN"
+        elif b > r and b > g:
+            return "BLUE"
+        elif r > 50 and g > 50:
+            return "YELLOW"
         return "UNKNOWN"
 
-# ------------------------
-# EVENTOS
-# ------------------------
-def log_event(name):
+    # ---------------- MQTT ----------------
+    def publish_sensor(self, color):
+        payload = [
+            {
+                "sensor": self.TOPIC_SENSOR,
+                "value": color,
+                "sequence": self.detected_sequence,
+                "camouflage": self.camouflage_active,
+                "timestamp": self.get_timestamp()
+            }
+        ]
 
-    events.insert_one({
-        "type": name,
-        "timestamp": datetime.now()
-    })
+        self.client.publish(self.TOPIC_SENSOR, json.dumps(payload))
 
-# ------------------------
-# CAMUFLAJE
-# ------------------------
-def activate_camouflage():
+    # ---------------- SECUENCIA ----------------
+    def process_sequence(self, color):
 
-    global camouflage_active
+        if color == "UNKNOWN":
+            return
 
-    if not camouflage_active:
+        self.detected_sequence.append(color)
 
-        camouflage_active = True
+        if len(self.detected_sequence) > 3:
+            self.detected_sequence.pop(0)
 
-        print("🟦 CAMUFLAJE ACTIVADO")
-
-        client.publish("nave/alertas/camuflaje", "ON")
-        log_event("camouflage_on")
-
-        for color in correct_sequence:
-            set_color(color)
-            time.sleep(1)
-
-
-def deactivate_camouflage():
-
-    global camouflage_active
-
-    if camouflage_active:
-
-        camouflage_active = False
-
-        print("❌ CAMUFLAJE DESACTIVADO")
-
-        client.publish("nave/alertas/camuflaje", "OFF")
-        log_event("camouflage_off")
-
-        set_color("OFF")
-
-# ------------------------
-# LOOP
-# ------------------------
-def run():
-
-    global sequence_detected
-
-    while True:
-
-        color = read_color()
-
-        if color != "UNKNOWN":
-
-            print("Color:", color)
-            client.publish("nave/sensores/color", color)
-
-            sequence_detected.append(color)
-
-            if len(sequence_detected) > 3:
-                sequence_detected.pop(0)
-
-            if sequence_detected == correct_sequence:
-                activate_camouflage()
-                sequence_detected = []
-
+        if self.detected_sequence == self.SEQUENCE_TARGET:
+            if not self.camouflage_active:
+                print("CAMUFLAJE ACTIVADO")
+                self.activate_camouflage()
         else:
-            deactivate_camouflage()
+            if self.camouflage_active:
+                print("CAMUFLAJE DESACTIVADO")
+                self.deactivate_camouflage()
 
-        time.sleep(0.5)
+        # Publicar SIEMPRE estado
+        self.publish_sensor(color)
 
+    # ---------------- LOOP SENSOR ----------------
+    def read_color(self):
+        if self.stop_event.is_set():
+            return
 
-if __name__ == "__main__":
+        red = self.measure_channel(False, False)
+        blue = self.measure_channel(False, True)
+        green = self.measure_channel(True, True)
 
-    try:
-        run()
+        color = self.classify_color(red, green, blue)
 
-    except KeyboardInterrupt:
+        self.process_sequence(color)
+
+        threading.Timer(1.5, self.read_color).start()
+
+    # ---------------- START ----------------
+    def start(self):
+        print("Disguise iniciado")
+        self.read_color()
+
+    # ---------------- STOP ----------------
+    def stop(self):
+        print("Disguise detenido")
+        self.stop_event.set()
         GPIO.cleanup()
+        self.client.loop_stop()
+        self.client.disconnect()
