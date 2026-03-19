@@ -4,105 +4,116 @@ import time
 import json
 import paho.mqtt.client as mqtt
 
+import board
+import neopixel
+
+
 class Disguise:
 
     # ---------------- CONFIG ----------------
-    S0, S1, S2, S3, OUT = 6, 13, 19, 26, 21
-    R_PIN, G_PIN, B_PIN = 2, 3, 10
-    BLUE_LED = 12
+    S0, S1, S2, S3, OUT = 19, 26, 16, 20, 21
+
+    BLUE_LED = 12  # indicador físico
+
+    # WS2812B
+    PIXEL_PIN = board.D18   # GPIO18 obligatorio
+    NUM_PIXELS = 8          # ajusta a tu tira
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883
 
     TOPIC_SENSOR = "nave/sensores/color"
+    TOPIC_ALERT = "nave/alertas/criticas"
 
     SEQUENCE_TARGET = ["RED", "YELLOW", "BLUE"]
 
     def __init__(self):
 
-        # ---------------- GPIO ----------------
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
         GPIO.setup([self.S0, self.S1, self.S2, self.S3], GPIO.OUT)
         GPIO.setup(self.OUT, GPIO.IN)
 
-        GPIO.setup(self.R_PIN, GPIO.OUT)
-        GPIO.setup(self.G_PIN, GPIO.OUT)
-        GPIO.setup(self.B_PIN, GPIO.OUT)
         GPIO.setup(self.BLUE_LED, GPIO.OUT)
 
-        # Escala frecuencia
+        # Escala frecuencia TCS3200
         GPIO.output(self.S0, True)
         GPIO.output(self.S1, False)
 
-        # ---------------- MQTT ----------------
+        # ---------------- WS2812B ----------------
+        self.pixels = neopixel.NeoPixel(
+            self.PIXEL_PIN,
+            self.NUM_PIXELS,
+            brightness=0.5,
+            auto_write=False
+        )
+
+        # MQTT
         self.client = mqtt.Client()
         self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
         self.client.loop_start()
 
-        # ---------------- ESTADO ----------------
+        # Estado
         self.detected_sequence = []
         self.camouflage_active = False
+        self.prev_state = False
+
         self.stop_event = threading.Event()
 
     # ---------------- TIMESTAMP ----------------
     def get_timestamp(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # ---------------- RGB LED ----------------
+    # ---------------- CONTROL LED STRIP ----------------
     def set_color(self, r, g, b):
-        GPIO.output(self.R_PIN, r)
-        GPIO.output(self.G_PIN, g)
-        GPIO.output(self.B_PIN, b)
+        # WS2812B usa formato GRB
+        for i in range(self.NUM_PIXELS):
+            self.pixels[i] = (g, r, b)
+        self.pixels.show()
 
-    # ---------------- CAMUFLAJE ----------------
-    def activate_camouflage(self):
-        self.camouflage_active = True
-        GPIO.output(self.BLUE_LED, True)
-        self.sequence_loop()
-
-    def deactivate_camouflage(self):
-        self.camouflage_active = False
-        self.set_color(0, 0, 0)
-        GPIO.output(self.BLUE_LED, False)
-
-    def sequence_loop(self):
-        if not self.camouflage_active or self.stop_event.is_set():
-            return
+    # ---------------- LOOP CAMUFLAJE ----------------
+    def camouflage_loop(self):
 
         colors = [
-            (1,0,0),  # rojo
-            (1,1,0),  # amarillo
-            (0,0,1)   # azul
+            (255, 0, 0),     # RED
+            (255, 255, 0),   # YELLOW
+            (0, 0, 255)      # BLUE
         ]
 
-        def play(index=0):
-            if not self.camouflage_active or self.stop_event.is_set():
-                self.set_color(0,0,0)
-                return
+        index = 0
 
-            self.set_color(*colors[index])
-            threading.Timer(1.0, lambda: play((index+1)%3)).start()
+        while not self.stop_event.is_set():
 
-        play()
+            if self.camouflage_active:
+                self.set_color(*colors[index])
+                index = (index + 1) % 3
+                self.stop_event.wait(1)
+            else:
+                self.set_color(0, 0, 0)
+                self.stop_event.wait(0.2)
 
     # ---------------- MEDICIÓN ----------------
     def measure_channel(self, s2, s3):
+
         GPIO.output(self.S2, s2)
         GPIO.output(self.S3, s3)
 
-        start = time.time()
         count = 0
+        start = time.time()
 
         while time.time() - start < 0.1:
             if GPIO.input(self.OUT) == 0:
                 count += 1
+
+                timeout = time.time()
                 while GPIO.input(self.OUT) == 0:
-                    pass
+                    if time.time() - timeout > 0.002:
+                        break
 
         return count
 
+    # ---------------- CLASIFICACIÓN ----------------
     def classify_color(self, r, g, b):
         if r > g and r > b:
             return "RED"
@@ -110,23 +121,29 @@ class Disguise:
             return "GREEN"
         elif b > r and b > g:
             return "BLUE"
-        elif r > 50 and g > 50:
+        elif r > b and g > b:
             return "YELLOW"
         return "UNKNOWN"
 
-    # ---------------- MQTT ----------------
+    # ---------------- MQTT SENSOR ----------------
     def publish_sensor(self, color):
-        payload = [
-            {
-                "sensor": self.TOPIC_SENSOR,
-                "value": color,
-                "sequence": self.detected_sequence,
-                "camouflage": self.camouflage_active,
-                "timestamp": self.get_timestamp()
-            }
-        ]
-
+        payload = {
+            "sensor": self.TOPIC_SENSOR,
+            "color": color,
+            "sequence": self.detected_sequence,
+            "camouflage": self.camouflage_active,
+            "timestamp": self.get_timestamp()
+        }
         self.client.publish(self.TOPIC_SENSOR, json.dumps(payload))
+
+    # ---------------- MQTT ALERT ----------------
+    def publish_alert(self, state):
+        payload = {
+            "type": "CAMOUFLAGE",
+            "state": "ON" if state else "OFF",
+            "timestamp": self.get_timestamp()
+        }
+        self.client.publish(self.TOPIC_ALERT, json.dumps(payload))
 
     # ---------------- SECUENCIA ----------------
     def process_sequence(self, color):
@@ -140,41 +157,45 @@ class Disguise:
             self.detected_sequence.pop(0)
 
         if self.detected_sequence == self.SEQUENCE_TARGET:
-            if not self.camouflage_active:
-                print("CAMUFLAJE ACTIVADO")
-                self.activate_camouflage()
+            self.camouflage_active = True
         else:
-            if self.camouflage_active:
-                print("CAMUFLAJE DESACTIVADO")
-                self.deactivate_camouflage()
+            self.camouflage_active = False
 
-        # Publicar SIEMPRE estado
+        # Cambio de estado
+        if self.camouflage_active != self.prev_state:
+            print("CAMOUFLAJE:", "ON" if self.camouflage_active else "OFF")
+            self.publish_alert(self.camouflage_active)
+            GPIO.output(self.BLUE_LED, self.camouflage_active)
+            self.prev_state = self.camouflage_active
+
         self.publish_sensor(color)
 
     # ---------------- LOOP SENSOR ----------------
-    def read_color(self):
-        if self.stop_event.is_set():
-            return
+    def sensor_loop(self):
 
-        red = self.measure_channel(False, False)
-        blue = self.measure_channel(False, True)
-        green = self.measure_channel(True, True)
+        while not self.stop_event.is_set():
 
-        color = self.classify_color(red, green, blue)
+            red = self.measure_channel(False, False)
+            blue = self.measure_channel(False, True)
+            green = self.measure_channel(True, True)
 
-        self.process_sequence(color)
+            color = self.classify_color(red, green, blue)
 
-        threading.Timer(1.5, self.read_color).start()
+            self.process_sequence(color)
+
+            self.stop_event.wait(1.5)
 
     # ---------------- START ----------------
     def start(self):
         print("Disguise iniciado")
-        self.read_color()
+
+        threading.Thread(target=self.sensor_loop, daemon=True).start()
+        threading.Thread(target=self.camouflage_loop, daemon=True).start()
 
     # ---------------- STOP ----------------
     def stop(self):
         print("Disguise detenido")
         self.stop_event.set()
-        GPIO.cleanup()
         self.client.loop_stop()
         self.client.disconnect()
+        self.set_color(0, 0, 0)

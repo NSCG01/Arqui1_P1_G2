@@ -5,26 +5,26 @@ import json
 import statistics
 import paho.mqtt.client as mqtt
 
+
 class MeteorDetector:
 
     # ---------------- CONFIG ----------------
-    TRIG_PIN = 23
-    ECHO_PIN = 24
-    BUZZER = 18
-    Y_LED = 25
+    TRIG_PIN = 7
+    ECHO_PIN = 8
+    BUZZER = 17
+    Y_LED = 27
 
     SPEED_OF_SOUND_CM_S = 34300
     TIMEOUT_S = 0.02
     SAMPLES = 5
-    MEASURE_DELAY = 0.5
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883
     TOPIC_SENSOR = "nave/sensores/proximidad"
+    TOPIC_ALERT = "nave/alertas/criticas"
 
     def __init__(self):
 
-        # ---------------- GPIO ----------------
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
@@ -35,67 +35,66 @@ class MeteorDetector:
 
         GPIO.output(self.TRIG_PIN, GPIO.LOW)
 
-        # ---------------- MQTT ----------------
+        # MQTT
         self.client = mqtt.Client()
         self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
         self.client.loop_start()
 
-        # ---------------- ESTADO ----------------
+        # Estado
         self.stop_event = threading.Event()
         self.distance = 0
-        self.level = "SAFE"
+        self.level = "FAR"
+        self.prev_level = None
+
+        self.invalid_count = 0
 
     # ---------------- TIMESTAMP ----------------
     def get_timestamp(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # ---------------- LECTURA BASE (ESTABLE) ----------------
+    # ---------------- LECTURA ----------------
     def read_distance_cm(self):
 
-        GPIO.output(self.TRIG_PIN, GPIO.LOW)
-        time.sleep(0.0002)
+        GPIO.output(self.TRIG_PIN, False)
+        start = time.time()
 
-        GPIO.output(self.TRIG_PIN, GPIO.HIGH)
-        time.sleep(0.00001)
-        GPIO.output(self.TRIG_PIN, GPIO.LOW)
+        # Trigger
+        GPIO.output(self.TRIG_PIN, True)
+        GPIO.output(self.TRIG_PIN, False)
 
         start_time = time.time()
 
-        # Esperar subida
-        while GPIO.input(self.ECHO_PIN) == GPIO.LOW:
+        while GPIO.input(self.ECHO_PIN) == 0:
             if time.time() - start_time > self.TIMEOUT_S:
                 return None
 
         pulse_start = time.time()
 
-        # Esperar bajada
-        while GPIO.input(self.ECHO_PIN) == GPIO.HIGH:
+        while GPIO.input(self.ECHO_PIN) == 1:
             if time.time() - pulse_start > self.TIMEOUT_S:
                 return None
 
         pulse_end = time.time()
-        pulse_duration = pulse_end - pulse_start
+        duration = pulse_end - pulse_start
 
-        distance = (pulse_duration * self.SPEED_OF_SOUND_CM_S) / 2
-        return distance
+        return (duration * self.SPEED_OF_SOUND_CM_S) / 2
 
-    # ---------------- LECTURA FILTRADA ----------------
     def get_filtered_distance(self):
 
         samples = []
 
         for _ in range(self.SAMPLES):
-            value = self.read_distance_cm()
-            if value is not None:
-                samples.append(value)
-            time.sleep(0.05)
+            d = self.read_distance_cm()
+            if d is not None:
+                samples.append(d)
 
         if samples:
             return round(statistics.median(samples), 2)
+
         return None
 
     # ---------------- CLASIFICACIÓN ----------------
-    def classify_distance(self):
+    def classify(self):
 
         if self.distance < 20:
             self.level = "CRITICAL"
@@ -104,69 +103,82 @@ class MeteorDetector:
         else:
             self.level = "FAR"
 
-    # ---------------- ACTUADORES ----------------
-    def control_outputs(self):
+    # ---------------- BUZZER ----------------
+    def buzzer_loop(self):
 
-        # LED
-        GPIO.output(self.Y_LED, self.level != "FAR")
+        while not self.stop_event.is_set():
 
-        # Buzzer
-        if self.level == "CRITICAL":
-            GPIO.output(self.BUZZER, True)
-
-        elif self.level == "NEAR":
-            self.beep_pattern([0.1, 0.1, 0.1])
-
-        elif self.level == "FAR":
-            self.beep_pattern([0.2])
-
-    def beep_pattern(self, beeps):
-
-        def play(index=0):
-            if index < len(beeps):
+            if self.level == "CRITICAL":
                 GPIO.output(self.BUZZER, True)
-                threading.Timer(beeps[index], lambda: stop(index)).start()
-            else:
+                self.stop_event.wait(0.1)
+
+            elif self.level == "NEAR":
+                for _ in range(3):
+                    GPIO.output(self.BUZZER, True)
+                    self.stop_event.wait(0.1)
+                    GPIO.output(self.BUZZER, False)
+                    self.stop_event.wait(0.1)
+                self.stop_event.wait(1)
+
+            else:  # FAR
+                GPIO.output(self.BUZZER, True)
+                self.stop_event.wait(0.2)
                 GPIO.output(self.BUZZER, False)
-
-        def stop(index):
-            GPIO.output(self.BUZZER, False)
-            threading.Timer(0.1, lambda: play(index + 1)).start()
-
-        play()
+                self.stop_event.wait(2)
 
     # ---------------- MQTT ----------------
-    def publish_data(self):
-
-        payload = [
-            {
-                "sensor": self.TOPIC_SENSOR,
-                "value": self.distance,
-                "level": self.level,
-                "timestamp": self.get_timestamp()
-            }
-        ]
-
+    def publish_sensor(self):
+        payload = {
+            "distance": self.distance,
+            "level": self.level,
+            "timestamp": self.get_timestamp()
+        }
         self.client.publish(self.TOPIC_SENSOR, json.dumps(payload))
 
-    # ---------------- LOOP PRINCIPAL ----------------
+    def publish_alert(self):
+        payload = {
+            "type": "METEOR",
+            "level": self.level,
+            "timestamp": self.get_timestamp()
+        }
+        self.client.publish(self.TOPIC_ALERT, json.dumps(payload))
+
+    # ---------------- LOOP ----------------
     def loop(self):
-        if self.stop_event.is_set():
-            return
 
-        distance = self.get_filtered_distance()
+        while not self.stop_event.is_set():
 
-        if distance is not None:
+            distance = self.get_filtered_distance()
+
+            if distance is None:
+                self.invalid_count += 1
+
+                if self.invalid_count >= 3:
+                    print("Lectura inválida persistente")
+                self.stop_event.wait(0.5)
+                continue
+
+            self.invalid_count = 0
             self.distance = distance
-            self.classify_distance()
-            self.control_outputs()
-            self.publish_data()
 
-            print(f" {self.distance} cm | {self.level}")
-        else:
-            print(" Lectura inválida")
+            self.classify()
 
-        threading.Timer(self.MEASURE_DELAY, self.loop).start()
+            # LED
+            GPIO.output(self.Y_LED, self.level != "FAR")
+
+            # MQTT sensor
+            self.publish_sensor()
+
+            # ALERTA SOLO SI CAMBIA
+            if self.level != self.prev_level:
+                print(f"{self.distance} cm | {self.level}")
+
+                if self.level == "CRITICAL":
+                    self.publish_alert()
+
+                self.prev_level = self.level
+
+            self.stop_event.wait(0.5)
 
     # ---------------- LCD ----------------
     def get_meteor_status(self):
@@ -174,13 +186,14 @@ class MeteorDetector:
 
     # ---------------- START ----------------
     def start(self):
-        print(" MeteorDetector iniciado")
-        self.loop()
+        print("MeteorDetector iniciado")
+
+        threading.Thread(target=self.loop, daemon=True).start()
+        threading.Thread(target=self.buzzer_loop, daemon=True).start()
 
     # ---------------- STOP ----------------
     def stop(self):
-        print(" MeteorDetector detenido")
+        print("MeteorDetector detenido")
         self.stop_event.set()
-        GPIO.cleanup()
         self.client.loop_stop()
         self.client.disconnect()

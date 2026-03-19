@@ -1,18 +1,27 @@
 import RPi.GPIO as GPIO
 import threading
 import time
+import json
+import paho.mqtt.client as mqtt
+
 
 class Turret:
 
     # ---------------- CONFIG ----------------
-    PINS = [6, 13, 19, 26]
+    PINS = [7, 9, 10, 11]
 
-    BUTTON_LEFT = 20
-    BUTTON_RIGHT = 21
-    BUTTON_FIRE = 16
+    BUTTON_LEFT = 0
+    BUTTON_RIGHT = 1
+    BUTTON_FIRE = 12
 
     LASER = 12
     BUZZER = 25
+
+    MQTT_BROKER = "localhost"
+    MQTT_PORT = 1883
+    TOPIC_COMMAND = "nave/actuadores/torreta"
+
+    DEBOUNCE = 0.2
 
     # Stepper
     STEPS_PER_REV = 2048
@@ -31,7 +40,6 @@ class Turret:
 
     def __init__(self):
 
-        # ---------------- GPIO ----------------
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
 
@@ -46,7 +54,14 @@ class Turret:
         GPIO.setup(self.LASER, GPIO.OUT)
         GPIO.setup(self.BUZZER, GPIO.OUT)
 
-        # ---------------- ESTADO ----------------
+        # MQTT
+        self.client = mqtt.Client()
+        self.client.on_message = self.on_message
+        self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
+        self.client.subscribe(self.TOPIC_COMMAND)
+        self.client.loop_start()
+
+        # Estado
         self.stop_event = threading.Event()
 
         self.current_step = 0
@@ -55,6 +70,12 @@ class Turret:
 
         self.step_index = 0
         self.moving = False
+        self.is_firing = False
+
+        # debounce
+        self.last_left = 0
+        self.last_right = 0
+        self.last_fire = 0
 
     # ---------------- STEPPER ----------------
     def step_once(self, direction):
@@ -68,20 +89,21 @@ class Turret:
         self.current_angle = (self.current_step * self.DEG_PER_STEP) % 360
 
     def motor_loop(self):
-        if self.stop_event.is_set():
-            return
 
-        diff = (self.target_angle - self.current_angle + 540) % 360 - 180
+        while not self.stop_event.is_set():
 
-        if abs(diff) > self.DEG_PER_STEP:
-            self.moving = True
-            direction = 1 if diff > 0 else -1
-            self.step_once(direction)
-        else:
-            self.moving = False
-            self.release_motor()
+            diff = (self.target_angle - self.current_angle + 540) % 360 - 180
 
-        threading.Timer(0.003, self.motor_loop).start()
+            if abs(diff) > self.DEG_PER_STEP:
+                self.moving = True
+                direction = 1 if diff > 0 else -1
+                self.step_once(direction)
+            else:
+                if self.moving:
+                    self.release_motor()
+                    self.moving = False
+
+            self.stop_event.wait(0.003)
 
     def release_motor(self):
         for p in self.PINS:
@@ -89,48 +111,95 @@ class Turret:
 
     # ---------------- BOTONES ----------------
     def button_loop(self):
-        if self.stop_event.is_set():
+
+        while not self.stop_event.is_set():
+
+            now = time.time()
+
+            if GPIO.input(self.BUTTON_LEFT) == 0:
+                if now - self.last_left > self.DEBOUNCE:
+                    self.target_angle = (self.target_angle - 5) % 360
+                    self.last_left = now
+
+            if GPIO.input(self.BUTTON_RIGHT) == 0:
+                if now - self.last_right > self.DEBOUNCE:
+                    self.target_angle = (self.target_angle + 5) % 360
+                    self.last_right = now
+
+            if GPIO.input(self.BUTTON_FIRE) == 0:
+                if now - self.last_fire > self.DEBOUNCE:
+                    self.fire()
+                    self.last_fire = now
+
+            self.stop_event.wait(0.05)
+
+    # ---------------- FIRE ----------------
+    def fire(self):
+
+        if self.is_firing:
             return
 
-        if GPIO.input(self.BUTTON_LEFT) == 0:
-            self.target_angle = (self.target_angle - 5) % 360
-
-        if GPIO.input(self.BUTTON_RIGHT) == 0:
-            self.target_angle = (self.target_angle + 5) % 360
-
-        if GPIO.input(self.BUTTON_FIRE) == 0:
-            self.fire()
-
-        threading.Timer(0.1, self.button_loop).start()
-
-    # ---------------- DISPARO ----------------
-    def fire(self):
-        print(" FIRE!")
+        self.is_firing = True
+        print("FIRE!")
 
         GPIO.output(self.LASER, True)
 
-        def buzz():
-            GPIO.output(self.BUZZER, True)
-            threading.Timer(0.05, lambda: GPIO.output(self.BUZZER, False)).start()
+        def fire_loop():
+            count = 0
 
-        for i in range(5):
-            threading.Timer(i * 0.08, buzz).start()
+            while count < 5 and not self.stop_event.is_set():
+                GPIO.output(self.BUZZER, True)
+                self.stop_event.wait(0.05)
+                GPIO.output(self.BUZZER, False)
+                self.stop_event.wait(0.05)
+                count += 1
 
-        threading.Timer(0.4, lambda: GPIO.output(self.LASER, False)).start()
+            GPIO.output(self.LASER, False)
+            self.is_firing = False
 
-    # ---------------- ESTADO PARA LCD ----------------
+        threading.Thread(target=fire_loop, daemon=True).start()
+
+    # ---------------- MQTT ----------------
+    def on_message(self, client, userdata, msg):
+
+        try:
+            data = json.loads(msg.payload.decode())
+
+            if "angle" in data:
+                self.target_angle = float(data["angle"]) % 360
+
+            cmd = data.get("cmd", "").upper()
+
+            if cmd == "LEFT":
+                self.target_angle = (self.target_angle - 5) % 360
+
+            elif cmd == "RIGHT":
+                self.target_angle = (self.target_angle + 5) % 360
+
+            elif cmd == "FIRE":
+                self.fire()
+
+            elif cmd == "HOME":
+                self.target_angle = 0
+
+        except Exception as e:
+            print("MQTT ERROR:", e)
+
+    # ---------------- LCD ----------------
     def get_turret_status(self):
         return f"{round(self.current_angle,1)}°"
 
     # ---------------- START ----------------
     def start(self):
-        print(" Turret iniciado")
-        self.motor_loop()
-        self.button_loop()
+        print("Turret iniciado")
+
+        threading.Thread(target=self.motor_loop, daemon=True).start()
+        threading.Thread(target=self.button_loop, daemon=True).start()
 
     # ---------------- STOP ----------------
     def stop(self):
         print("Turret detenido")
         self.stop_event.set()
         self.release_motor()
-        GPIO.cleanup()
+        self.client.loop_stop()
+        self.client.disconnect()

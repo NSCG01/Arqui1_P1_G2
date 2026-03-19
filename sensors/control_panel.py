@@ -1,6 +1,9 @@
 import RPi.GPIO as GPIO
 import threading
 import time
+import json
+import paho.mqtt.client as mqtt
+
 
 class ControlPanel:
 
@@ -8,22 +11,17 @@ class ControlPanel:
     EMERGENCY_BUTTON = 11
     LED_STATUS = 9
 
-    # Buzzers (ajusta si cambiaste pines)
-    BUZZER_FIRE = 18
+    BUZZER_METEOR = 17
     BUZZER_TURRET = 25
 
-    def __init__(self, systems):
+    MQTT_BROKER = "localhost"
+    MQTT_PORT = 1883
 
-        """
-        systems = {
-            "fire": FireDetector,
-            "meteor": MeteorDetector,
-            "disguise": Disguise,
-            "env": Environment,
-            "gate": Gate,
-            "turret": Turret
-        }
-        """
+    TOPIC_ALERT = "nave/alertas/criticas"
+
+    DEBOUNCE_TIME = 0.3
+
+    def __init__(self, systems):
 
         self.systems = systems
 
@@ -37,20 +35,39 @@ class ControlPanel:
         GPIO.setup(self.BUZZER_FIRE, GPIO.OUT)
         GPIO.setup(self.BUZZER_TURRET, GPIO.OUT)
 
+        # ---------------- MQTT ----------------
+        self.client = mqtt.Client()
+        self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
+        self.client.loop_start()
+
         # ---------------- ESTADO ----------------
         self.stop_event = threading.Event()
 
         self.emergency_active = False
         self.last_button_state = 1
-        self.press_count = 0
         self.last_press_time = 0
+
+    # ---------------- TIMESTAMP ----------------
+    def get_timestamp(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # ---------------- MQTT ----------------
+    def publish_alert(self, state):
+        payload = [
+            {
+                "system": "control_panel",
+                "event": "EMERGENCY",
+                "state": state,
+                "timestamp": self.get_timestamp()
+            }
+        ]
+        self.client.publish(self.TOPIC_ALERT, json.dumps(payload))
 
     # ---------------- LED SISTEMA ----------------
     def system_led(self):
         if self.stop_event.is_set():
             return
 
-        # LED encendido si NO hay emergencia
         GPIO.output(self.LED_STATUS, not self.emergency_active)
 
         threading.Timer(1.0, self.system_led).start()
@@ -61,72 +78,59 @@ class ControlPanel:
             return
 
         current = GPIO.input(self.EMERGENCY_BUTTON)
+        now = time.time()
 
-        # detección flanco
+        # FLANCO + DEBOUNCE
         if self.last_button_state == 1 and current == 0:
-            now = time.time()
-
-            # reset contador si pasa mucho tiempo
-            if now - self.last_press_time > 2:
-                self.press_count = 0
-
-            self.press_count += 1
-            self.last_press_time = now
-
-            self.handle_presses()
+            if now - self.last_press_time > self.DEBOUNCE_TIME:
+                self.last_press_time = now
+                self.handle_press()
 
         self.last_button_state = current
 
-        threading.Timer(0.1, self.button_loop).start()
+        threading.Timer(0.05, self.button_loop).start()
 
-    # ---------------- LÓGICA DE PRESIONES ----------------
-    def handle_presses(self):
-
-        # 1 click → activar emergencia
-        if self.press_count == 1 and not self.emergency_active:
+    # ---------------- LÓGICA ----------------
+    def handle_press(self):
+        if not self.emergency_active:
             self.activate_emergency()
-
-        # 2 clicks → desactivar
-        elif self.press_count >= 2 and self.emergency_active:
+        else:
             self.deactivate_emergency()
-            self.press_count = 0
 
     # ---------------- EMERGENCIA ----------------
     def activate_emergency(self):
         print("🚨 EMERGENCIA ACTIVADA")
         self.emergency_active = True
 
-        # detener todos los sistemas
+        # detener sistemas
         for name, system in self.systems.items():
             try:
                 system.stop()
-            except:
-                pass
+            except Exception as e:
+                print(f"Error deteniendo {name}: {e}")
 
-        # encender buzzers
         GPIO.output(self.BUZZER_FIRE, True)
         GPIO.output(self.BUZZER_TURRET, True)
-
-        # apagar LED sistema
         GPIO.output(self.LED_STATUS, False)
 
-    def deactivate_emergency(self):
-        print("EMERGENCIA DESACTIVADA - REINICIANDO")
+        self.publish_alert("ON")
 
+    def deactivate_emergency(self):
+        print("EMERGENCIA DESACTIVADA")
         self.emergency_active = False
 
-        # apagar buzzers
         GPIO.output(self.BUZZER_FIRE, False)
         GPIO.output(self.BUZZER_TURRET, False)
+        GPIO.output(self.LED_STATUS, True)
 
         # reiniciar sistemas
         for name, system in self.systems.items():
             try:
                 system.start()
-            except:
-                pass
+            except Exception as e:
+                print(f"Error iniciando {name}: {e}")
 
-        GPIO.output(self.LED_STATUS, True)
+        self.publish_alert("OFF")
 
     # ---------------- LCD ----------------
     def get_emergency_status(self):
@@ -146,4 +150,5 @@ class ControlPanel:
     def stop(self):
         print("ControlPanel detenido")
         self.stop_event.set()
-        GPIO.cleanup()
+        self.client.loop_stop()
+        self.client.disconnect()
