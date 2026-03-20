@@ -9,9 +9,9 @@ class FireDetector:
 
     # ---------------- CONFIG ----------------
     MQ_PIN = 14
-    LED = 15
-    FAN1 = 18
-    FAN2 = 23
+    LED = 4
+    FAN1 = 0
+    FAN2 = 0
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883

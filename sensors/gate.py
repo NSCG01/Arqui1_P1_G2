@@ -8,9 +8,9 @@ import paho.mqtt.client as mqtt
 class Gate:
 
     # ---------------- CONFIG ----------------
-    SERVO = 24
-    BUTTON_OPEN = 5
-    BUTTON_CLOSE = 6
+    SERVO = 15
+    BUTTON_OPEN = 10
+    BUTTON_CLOSE = 9
 
     OPEN_ANGLE = 90
     CLOSED_ANGLE = 0

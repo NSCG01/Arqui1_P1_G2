@@ -13,7 +13,7 @@ class Disguise:
     # ---------------- CONFIG ----------------
     S0, S1, S2, S3, OUT = 19, 26, 16, 20, 21
 
-    BLUE_LED = 12  # indicador físico
+    BLUE_LED = 17  # indicador físico
 
     # WS2812B
     PIXEL_PIN = board.D18   # GPIO18 obligatorio

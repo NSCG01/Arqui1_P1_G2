@@ -8,14 +8,14 @@ import paho.mqtt.client as mqtt
 class Turret:
 
     # ---------------- CONFIG ----------------
-    PINS = [7, 9, 10, 11]
+    PINS = [12, 7, 8, 25]
 
-    BUTTON_LEFT = 0
-    BUTTON_RIGHT = 1
-    BUTTON_FIRE = 12
+    BUTTON_LEFT = 6
+    BUTTON_RIGHT = 5
+    BUTTON_FIRE = 13
 
-    LASER = 12
-    BUZZER = 25
+    LASER = 4
+    BUZZER = 0
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883

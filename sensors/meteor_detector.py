@@ -9,9 +9,9 @@ import paho.mqtt.client as mqtt
 class MeteorDetector:
 
     # ---------------- CONFIG ----------------
-    TRIG_PIN = 7
-    ECHO_PIN = 8
-    BUZZER = 17
+    TRIG_PIN = 23
+    ECHO_PIN = 24
+    BUZZER = 0
     Y_LED = 27
 
     SPEED_OF_SOUND_CM_S = 34300

@@ -10,8 +10,8 @@ class Environment:
 
     # ---------------- CONFIG ----------------
     DHT_SENSOR = Adafruit_DHT.DHT11
-    DHT_PIN = 13
-    SOIL_PIN = 22
+    DHT_PIN = 1
+    SOIL_PIN = 1
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883

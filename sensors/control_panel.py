@@ -9,10 +9,10 @@ class ControlPanel:
 
     # ---------------- CONFIG ----------------
     EMERGENCY_BUTTON = 11
-    LED_STATUS = 9
+    LED_STATUS = 22
 
-    BUZZER_METEOR = 17
-    BUZZER_TURRET = 25
+    BUZZER_METEOR = 0
+    BUZZER_TURRET = 0
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883
