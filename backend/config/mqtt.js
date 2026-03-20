@@ -1,23 +1,44 @@
-const mqtt = require("mqtt")
-const SensorReading = require("../models/sensorReading")
+const mqtt = require("mqtt");
+const SensorReading = require("../models/sensorReading");
 
-const client = mqtt.connect("mqtt://localhost:1883")
+const client = mqtt.connect("mqtt://localhost:1883");
 
 client.on("connect", () => {
-    console.log("Conectado a MQTT")
-
-    client.subscribe("nave/sensores/#")
-})
+  console.log("Conectado a MQTT");
+  client.subscribe("nave/sensores/#");
+});
 
 client.on("message", async (topic, message) => {
-    console.log("Mensaje recibido:",topic, message.toString())
+  try {
+    const text = message.toString();
+    console.log("Mensaje recibido:", topic, text);
 
-    const data = new SensorReading({
-        sensor: topic,
-        value: parseFloat(message.toString())
-    })
+    let doc = {
+      sensor: topic,
+      timestamp: new Date(),
+    };
 
-    await data.save()
-})
+    if (topic === "nave/sensores/color") {
+      const payload = JSON.parse(text);
 
-module.exports = client
+      doc.value = 1; 
+      doc.color = payload.color || "UNKNOWN";
+      doc.sequence = payload.sequence || [];
+      doc.camouflage = Boolean(payload.camouflage);
+      doc.raw = payload;
+      if (payload.timestamp) {
+        doc.timestamp = new Date(payload.timestamp);
+      }
+    } else {
+      const numericValue = parseFloat(text);
+      doc.value = Number.isNaN(numericValue) ? 0 : numericValue;
+    }
+
+    const data = new SensorReading(doc);
+    await data.save();
+  } catch (error) {
+    console.error("Error procesando mensaje MQTT:", error.message);
+  }
+});
+
+module.exports = client;

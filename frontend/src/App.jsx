@@ -9,7 +9,7 @@ import {
   normalizeStats,
   sendCommand,
   sendMessage,
-} from "./services/api .js";
+} from "./services/api.js";
 
 export default function App() {
   const [gas, setGas] = useState(0);
@@ -250,12 +250,20 @@ export default function App() {
             Enviar
           </button>
 
-          <SectionTitle title="ESTADÍSTICAS" />
-          <StatItem label="Disparos" value={stats.disparos} />
-          <StatItem label="Tiempo camuflaje" value={stats.tiempoCamuflaje} />
-          <StatItem label="Alertas gas" value={stats.alertasGas} />
-          <StatItem label="Alertas meteorito" value={stats.alertasMeteorito} />
-          <StatItem label="Total lecturas" value={stats.totalLecturas} />
+      <SectionTitle title="GRÁFICAS" />
+      <button
+       className="btn"
+       onClick={() => window.open("/graficas", "_blank")}
+        >
+        Mostrar gráficas
+       </button>
+
+      <SectionTitle title="ESTADÍSTICAS" />
+     <StatItem label="Disparos" value={stats.disparos} />
+     <StatItem label="Tiempo camuflaje" value={stats.tiempoCamuflaje} />
+     <StatItem label="Alertas gas" value={stats.alertasGas} />
+     <StatItem label="Alertas meteorito" value={stats.alertasMeteorito} />
+     <StatItem label="Total lecturas" value={stats.totalLecturas} />
         </div>
       </div>
     </div>

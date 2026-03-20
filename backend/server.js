@@ -1,28 +1,32 @@
-const express = require("express")
-const cors = require("cors")
-const connectMongo = require("./config/mongo")
+const express = require("express");
+const cors = require("cors");
+const connectMongo = require("./config/mongo");
 
-require("./config/mqtt")
+require("./config/mqtt");
 
-const sensorsRoutes = require("./routes/sensors")
-const commandsRoutes = require("./routes/commands")
-const statsRoutes = require("./routes/stats")
+const sensorsRoutes = require("./routes/sensors");
+const commandsRoutes = require("./routes/commands");
+const statsRoutes = require("./routes/stats");
+const messagesRoutes = require("./routes/messages");
+const eventsRoutes = require("./routes/events");
 
-const app = express()
+const app = express();
 
-app.use(cors())
-app.use(express.json())   
+app.use(cors());
+app.use(express.json());
 
-connectMongo()
+connectMongo();
 
-app.use("/sensors", sensorsRoutes)
-app.use("/commands", commandsRoutes)
-app.use("/stats", statsRoutes)
+app.use("/sensors", sensorsRoutes);
+app.use("/commands", commandsRoutes);
+app.use("/stats", statsRoutes);
+app.use("/messages", messagesRoutes);
+app.use("/events", eventsRoutes);
 
-app.get("/", (req,res)=>{
-    res.send("Backend nave activo")
-})
+app.get("/", (req, res) => {
+  res.send("Backend nave activo");
+});
 
-app.listen(3000, ()=>{
-    console.log("Servidor corriendo en puerto 3000")
-})
+app.listen(3000, () => {
+  console.log("Servidor corriendo en puerto 3000");
+});

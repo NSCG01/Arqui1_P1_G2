@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const mqttClient = require("../config/mqtt");
-const Message = require("../models/Message");
+const Message = require("../models/message");
 
 router.post("/", async (req, res) => {
   try {
