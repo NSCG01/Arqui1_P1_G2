@@ -4,7 +4,7 @@ import time
 import RPi.GPIO as GPIO
 
 # -------- IMPORTS --------
-from esp32_interface import ESP32Interface
+from sensors.esp32_interface import ESP32Interface
 from fire_detector import FireDetector
 from meteor_detector import MeteorDetector
 from disguise import Disguise
