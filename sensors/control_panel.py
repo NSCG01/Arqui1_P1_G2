@@ -32,7 +32,7 @@ class ControlPanel:
             self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ ControlPanel MQTT error: {e}")
+            print(f"ControlPanel MQTT error: {e}")
 
         self.stop_event = threading.Event()
 
@@ -41,7 +41,7 @@ class ControlPanel:
         self.last_press_time = 0
         self.led_timer_running = False
         
-        print("✅ ControlPanel inicializado")
+        print(" ControlPanel inicializado")
 
     def get_timestamp(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
@@ -55,9 +55,9 @@ class ControlPanel:
         }
         try:
             self.client.publish(self.TOPIC_ALERT, json.dumps(payload))
-            print(f"🚨 EMERGENCY MQTT: {state}")
+            print(f" EMERGENCY MQTT: {state}")
         except Exception as e:
-            print(f"⚠️ ControlPanel publish error: {e}")
+            print(f"ControlPanel publish error: {e}")
 
     def system_led_loop(self):
         """Loop separado para el LED de estado"""
@@ -91,14 +91,14 @@ class ControlPanel:
             self.deactivate_emergency()
 
     def activate_emergency(self):
-        print("🚨 EMERGENCIA ACTIVADA")
+        print("EMERGENCIA ACTIVADA")
         self.emergency_active = True
 
         # detener sistemas
         for name, system in self.systems.items():
             try:
                 system.stop()
-                print(f"⏹️ Sistema {name} detenido")
+                print(f" Sistema {name} detenido")
             except Exception as e:
                 print(f"Error deteniendo {name}: {e}")
 
@@ -108,7 +108,7 @@ class ControlPanel:
         self.publish_alert("ON")
 
     def deactivate_emergency(self):
-        print("✅ EMERGENCIA DESACTIVADA")
+        print("EMERGENCIA DESACTIVADA")
         self.emergency_active = False
 
         # Apagar buzzer
@@ -118,7 +118,7 @@ class ControlPanel:
         for name, system in self.systems.items():
             try:
                 system.start()
-                print(f"▶️ Sistema {name} reiniciado")
+                print(f"Sistema {name} reiniciado")
             except Exception as e:
                 print(f"Error iniciando {name}: {e}")
 
@@ -131,7 +131,7 @@ class ControlPanel:
         return self.emergency_active
 
     def start(self):
-        print("✅ ControlPanel iniciado (buzzer vía ESP32)")
+        print("ControlPanel iniciado (buzzer vía ESP32)")
         GPIO.output(self.LED_STATUS, True)
         threading.Thread(target=self.system_led_loop, daemon=True).start()
         threading.Thread(target=self.button_loop, daemon=True).start()

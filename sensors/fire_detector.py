@@ -23,10 +23,10 @@ class FireDetector:
             self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ FireDetector MQTT error: {e}")
+            print(f" FireDetector MQTT error: {e}")
         
         self.stop_event = threading.Event()
-        print("✅ FireDetector inicializado")
+        print("FireDetector inicializado")
 
     def get_timestamp(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
@@ -44,7 +44,7 @@ class FireDetector:
                 self.prev_state = self.fire_detected
             
             if self.fire_detected != self.prev_state:
-                print(f"🔥 FIRE: {'ON' if self.fire_detected else 'OFF'}")
+                print(f"FIRE: {'ON' if self.fire_detected else 'OFF'}")
                 self.publish_alert()
                 self.prev_state = self.fire_detected
             
@@ -77,7 +77,7 @@ class FireDetector:
         return "FIRE!" if self.fire_detected else "SAFE"
 
     def start(self):
-        print("✅ FireDetector iniciado (usando ESP32)")
+        print("FireDetector iniciado (usando ESP32)")
         threading.Thread(target=self.loop, daemon=True).start()
 
     def stop(self):

@@ -190,8 +190,7 @@ void updateMeteorBuzzer() {
       }
       break;
       
-    case 3:  // CRITICAL: ya está siempre HIGH en handleMeteorBuzzer
-      // Mantener encendido
+    case 3:  
       break;
       
     default:  // OFF
@@ -284,6 +283,5 @@ void requestEvent() {
   
   Wire.write(buffer, idx);
   
-  // Debug opcional (comentar si causa problemas)
-  // Serial.printf("Enviados %d bytes\n", idx);
+ 
 }

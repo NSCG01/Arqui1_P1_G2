@@ -18,9 +18,9 @@ class Display:
             self.lcd = LCD(0x27, 1, 16, 2, True)
             self.lcd.clear()
             self.lcd.backlight(True)
-            print("✅ LCD inicializado")
+            print(" LCD inicializado")
         except Exception as e:
-            print(f"⚠️ LCD error: {e}")
+            print(f" LCD error: {e}")
             self.lcd = None
 
         self.client = mqtt.Client()
@@ -31,7 +31,7 @@ class Display:
             self.client.subscribe(self.TOPIC_MSG)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ Display MQTT error: {e}")
+            print(f"Display MQTT error: {e}")
 
         self.stop_event = threading.Event()
 
@@ -40,7 +40,7 @@ class Display:
         self.message_time = 0
         self.last_update = 0
         
-        print("✅ Display inicializado")
+        print(" Display inicializado")
 
     def now(self):
         return time.time()
@@ -49,7 +49,7 @@ class Display:
         try:
             data = json.loads(msg.payload.decode())
             self.last_message = data.get("msg", "")
-            print(f"📱 LCD recibe mensaje: {self.last_message}")
+            print(f" LCD recibe mensaje: {self.last_message}")
         except Exception:
             try:
                 self.last_message = msg.payload.decode()
@@ -167,7 +167,7 @@ class Display:
         threading.Timer(0.5, self.update).start()
 
     def start(self):
-        print("✅ LCD iniciado")
+        print("LCD iniciado")
         self.update()
 
     def stop(self):

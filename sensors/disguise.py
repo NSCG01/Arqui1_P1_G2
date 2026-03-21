@@ -46,14 +46,14 @@ class Disguise:
             self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ Disguise MQTT error: {e}")
+            print(f" Disguise MQTT error: {e}")
 
         self.detected_sequence = []
         self.camouflage_active = False
         self.prev_state = False
 
         self.stop_event = threading.Event()
-        print("✅ Disguise inicializado")
+        print("Disguise inicializado")
 
     def get_timestamp(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
@@ -115,7 +115,7 @@ class Disguise:
         try:
             self.client.publish(self.TOPIC_SENSOR, json.dumps(payload))
         except Exception as e:
-            print(f"⚠️ Disguise publish error: {e}")
+            print(f"Disguise publish error: {e}")
 
     def publish_alert(self, state):
         payload = {
@@ -126,7 +126,7 @@ class Disguise:
         try:
             self.client.publish(self.TOPIC_ALERT, json.dumps(payload))
         except Exception as e:
-            print(f"⚠️ Disguise alert error: {e}")
+            print(f" Disguise alert error: {e}")
 
     def process_sequence(self, color):
         if color == "UNKNOWN":
@@ -143,7 +143,7 @@ class Disguise:
             self.camouflage_active = False
 
         if self.camouflage_active != self.prev_state:
-            print("🎨 CAMOUFLAJE:", "ON" if self.camouflage_active else "OFF")
+            print("CAMOUFLAJE:", "ON" if self.camouflage_active else "OFF")
             self.publish_alert(self.camouflage_active)
             # Controlar LED azul vía ESP32
             self.esp32.set_led_blue_camo(self.camouflage_active)
@@ -164,7 +164,7 @@ class Disguise:
             time.sleep(1.5)
 
     def start(self):
-        print("✅ Disguise iniciado (LED azul vía ESP32)")
+        print("Disguise iniciado (LED azul vía ESP32)")
         threading.Thread(target=self.sensor_loop, daemon=True).start()
         threading.Thread(target=self.camouflage_loop, daemon=True).start()
 

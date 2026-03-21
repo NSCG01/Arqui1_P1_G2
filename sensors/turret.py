@@ -50,7 +50,7 @@ class Turret:
             self.client.subscribe(self.TOPIC_COMMAND)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ Turret MQTT error: {e}")
+            print(f" Turret MQTT error: {e}")
 
         self.stop_event = threading.Event()
 
@@ -67,7 +67,7 @@ class Turret:
         self.last_fire = 0
         self.last_status_pub = 0
         
-        print("✅ Turret inicializado")
+        print(" Turret inicializado")
 
     def step_once(self, direction):
         self.step_index = (self.step_index + direction) % len(self.SEQ)
@@ -107,13 +107,13 @@ class Turret:
             if GPIO.input(self.BUTTON_LEFT) == 0:
                 if now - self.last_left > self.DEBOUNCE:
                     self.target_angle = (self.target_angle - 15) % 360
-                    print(f"🎯 Torreta: LEFT → {self.target_angle}°")
+                    print(f" Torreta: LEFT  {self.target_angle}°")
                     self.last_left = now
 
             if GPIO.input(self.BUTTON_RIGHT) == 0:
                 if now - self.last_right > self.DEBOUNCE:
                     self.target_angle = (self.target_angle + 15) % 360
-                    print(f"🎯 Torreta: RIGHT → {self.target_angle}°")
+                    print(f" Torreta: RIGHT {self.target_angle}°")
                     self.last_right = now
 
             if GPIO.input(self.BUTTON_FIRE) == 0:
@@ -128,7 +128,7 @@ class Turret:
             return
 
         self.is_firing = True
-        print("🔫 TORRETA: ¡DISPARO!")
+        print(" TORRETA: ¡DISPARO!")
 
         # Encender láser vía ESP32
         self.esp32.set_laser(True)
@@ -145,7 +145,7 @@ class Turret:
 
             self.esp32.set_laser(False)
             self.esp32.set_buzzer_general(False)
-            print("🔫 Disparo completado")
+            print(" Disparo completado")
             self.is_firing = False
 
         threading.Thread(target=fire_loop, daemon=True).start()
@@ -153,11 +153,11 @@ class Turret:
     def on_message(self, client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode())
-            print(f"📩 MQTT Turret recibe: {data}")
+            print(f" MQTT Turret recibe: {data}")
 
             if "angle" in data:
                 self.target_angle = float(data["angle"]) % 360
-                print(f"🎯 Ángulo remoto: {self.target_angle}°")
+                print(f" Ángulo remoto: {self.target_angle}°")
 
             cmd = data.get("cmd", "").upper()
 
@@ -169,7 +169,7 @@ class Turret:
                 self.fire()
             elif cmd == "HOME":
                 self.target_angle = 0
-                print("🏠 Torreta HOME")
+                print(" Torreta HOME")
 
         except Exception as e:
             print(f"MQTT ERROR en turret: {e}")
@@ -184,13 +184,13 @@ class Turret:
         try:
             self.client.publish(self.TOPIC_STATUS, json.dumps(payload))
         except Exception as e:
-            print(f"⚠️ Turret publish error: {e}")
+            print(f" Turret publish error: {e}")
 
     def get_turret_status(self):
         return f"{round(self.current_angle,1)}°"
 
     def start(self):
-        print("✅ Turret iniciado (láser y buzzer vía ESP32)")
+        print("Turret iniciado (láser y buzzer vía ESP32)")
         threading.Thread(target=self.motor_loop, daemon=True).start()
         threading.Thread(target=self.button_loop, daemon=True).start()
 

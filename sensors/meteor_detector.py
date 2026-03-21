@@ -38,7 +38,7 @@ class MeteorDetector:
             self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ MeteorDetector MQTT error: {e}")
+            print(f" MeteorDetector MQTT error: {e}")
 
         # Estado
         self.stop_event = threading.Event()
@@ -47,7 +47,7 @@ class MeteorDetector:
         self.prev_level = None
 
         self.invalid_count = 0
-        print("✅ MeteorDetector inicializado")
+        print("MeteorDetector inicializado")
 
     def get_timestamp(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
@@ -118,7 +118,7 @@ class MeteorDetector:
         try:
             self.client.publish(self.TOPIC_SENSOR, json.dumps(payload))
         except Exception as e:
-            print(f"⚠️ MeteorDetector publish error: {e}")
+            print(f" MeteorDetector publish error: {e}")
 
     def publish_alert(self):
         payload = {
@@ -129,7 +129,7 @@ class MeteorDetector:
         try:
             self.client.publish(self.TOPIC_ALERT, json.dumps(payload))
         except Exception as e:
-            print(f"⚠️ MeteorDetector alert error: {e}")
+            print(f" MeteorDetector alert error: {e}")
 
     def loop(self):
         while not self.stop_event.is_set():
@@ -138,7 +138,7 @@ class MeteorDetector:
             if distance is None:
                 self.invalid_count += 1
                 if self.invalid_count >= 3:
-                    print("⚠️ METEOR: Lectura inválida persistente")
+                    print(" METEOR: Lectura inválida persistente")
                 self.stop_event.wait(0.5)
                 continue
 
@@ -154,7 +154,7 @@ class MeteorDetector:
 
             # Alerta solo si cambia a CRITICAL
             if self.level != self.prev_level:
-                print(f"☄️ METEOR: {self.distance} cm | {self.level}")
+                print(f" METEOR: {self.distance} cm | {self.level}")
                 if self.level == "CRITICAL":
                     self.publish_alert()
                 self.prev_level = self.level
@@ -165,7 +165,7 @@ class MeteorDetector:
         return f"{self.distance}cm {self.level}"
 
     def start(self):
-        print("✅ MeteorDetector iniciado (usando ESP32)")
+        print("MeteorDetector iniciado (usando ESP32)")
         threading.Thread(target=self.loop, daemon=True).start()
 
     def stop(self):

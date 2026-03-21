@@ -40,7 +40,7 @@ class Gate:
             self.client.subscribe(self.TOPIC_COMMAND)
             self.client.loop_start()
         except Exception as e:
-            print(f"⚠️ Gate MQTT error: {e}")
+            print(f" Gate MQTT error: {e}")
 
         self.stop_event = threading.Event()
         self.current_angle = self.CLOSED_ANGLE
@@ -53,7 +53,7 @@ class Gate:
         self.last_status_pub = 0
 
         self.target_angle = self.CLOSED_ANGLE
-        print("✅ Gate inicializado")
+        print(" Gate inicializado")
 
     def angle_to_duty(self, angle):
         return 2 + (angle / 18)
@@ -96,7 +96,7 @@ class Gate:
     def on_message(self, client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode())
-            print(f"📩 MQTT Gate recibe: {data}")
+            print(f" MQTT Gate recibe: {data}")
 
             cmd = data.get("cmd", "").upper()
 
@@ -118,18 +118,18 @@ class Gate:
         try:
             self.client.publish(self.TOPIC_STATUS, json.dumps(payload))
         except Exception as e:
-            print(f"⚠️ Gate publish error: {e}")
+            print(f" Gate publish error: {e}")
 
     def open_gate(self):
         if self.state != "OPEN" and not self.moving:
-            print("🚪 GATE OPEN")
+            print(" GATE OPEN")
             self.target_angle = self.OPEN_ANGLE
             self.state = "OPEN"
             self.publish_status()
 
     def close_gate(self):
         if self.state != "CLOSED" and not self.moving:
-            print("🚪 GATE CLOSED")
+            print(" GATE CLOSED")
             self.target_angle = self.CLOSED_ANGLE
             self.state = "CLOSED"
             self.publish_status()
@@ -138,7 +138,7 @@ class Gate:
         return self.state
 
     def start(self):
-        print("✅ Gate iniciado")
+        print(" Gate iniciado")
         threading.Thread(target=self.motor_loop, daemon=True).start()
         threading.Thread(target=self.button_loop, daemon=True).start()
 

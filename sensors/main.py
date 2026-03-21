@@ -17,19 +17,19 @@ from LCDisplay import Display
 def main():
 
     print("=" * 50)
-    print("🚀 Iniciando sistema de la nave con ESP32...")
+    print("Iniciando sistema de la nave con ESP32...")
     print("=" * 50)
 
     systems = {}
 
     try:
         # -------- INICIALIZAR ESP32 (I2C) --------
-        print("\n📡 Conectando con ESP32...")
+        print("\nConectando con ESP32...")
         esp32 = ESP32Interface()
         time.sleep(2)  # Dar tiempo para que ESP32 inicie
 
         # -------- INICIALIZAR MÓDULOS --------
-        print("\n🔧 Inicializando módulos...")
+        print("\n Inicializando módulos...")
         fire = FireDetector(esp32)
         meteor = MeteorDetector(esp32)
         disguise = Disguise(esp32)
@@ -56,7 +56,7 @@ def main():
         })
 
     except Exception as e:
-        print(f"\n❌ Error en inicialización: {e}")
+        print(f"\n Error en inicialización: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
@@ -65,11 +65,11 @@ def main():
     def safe_start(name, system):
         try:
             system.start()
-            print(f"✅ {name} iniciado")
+            print(f"{name} iniciado")
         except Exception as e:
-            print(f"❌ Error iniciando {name}: {e}")
+            print(f" Error iniciando {name}: {e}")
 
-    print("\n🚀 Iniciando todos los sistemas...")
+    print("\n Iniciando todos los sistemas...")
     safe_start("ESP32 Interface", esp32)
     safe_start("FireDetector", fire)
     safe_start("MeteorDetector", meteor)
@@ -80,13 +80,13 @@ def main():
     safe_start("LCD", lcd)
 
     print("\n" + "=" * 50)
-    print("🟢 SISTEMA COMPLETAMENTE OPERATIVO")
+    print(" SISTEMA COMPLETAMENTE OPERATIVO")
     print("=" * 50)
     print("Presiona Ctrl+C para apagar el sistema\n")
 
     # -------- SHUTDOWN LIMPIO --------
     def shutdown(signum=None, frame=None):
-        print("\n\n🛑 Apagando sistema...")
+        print("\n\n Apagando sistema...")
 
         shutdown_order = [
             ("LCD", lcd),
@@ -102,17 +102,17 @@ def main():
         for name, system in shutdown_order:
             try:
                 system.stop()
-                print(f"🔻 {name} detenido")
+                print(f" {name} detenido")
             except Exception as e:
-                print(f"⚠️ Error deteniendo {name}: {e}")
+                print(f" Error deteniendo {name}: {e}")
 
         try:
             GPIO.cleanup()
-            print("🧹 GPIO liberado")
+            print(" GPIO liberado")
         except Exception as e:
             print(f"GPIO cleanup error: {e}")
 
-        print("\n✅ Sistema apagado correctamente")
+        print("\n Sistema apagado correctamente")
         sys.exit(0)
 
     # -------- SIGNALS --------

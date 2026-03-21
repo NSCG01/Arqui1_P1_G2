@@ -30,9 +30,9 @@ class ESP32Interface:
         self.bus = None
         try:
             self.bus = smbus2.SMBus(self.I2C_BUS)
-            print("✅ I2C bus iniciado")
+            print("I2C bus iniciado")
         except Exception as e:
-            print(f"❌ Error iniciando I2C: {e}")
+            print(f"Error iniciando I2C: {e}")
             print("   Verifica que el ESP32 esté conectado y la dirección I2C correcta")
         
         # Datos recibidos (valores por defecto)
@@ -48,17 +48,17 @@ class ESP32Interface:
         try:
             self.client.connect("localhost", 1883, 60)
             self.client.loop_start()
-            print("✅ MQTT conectado")
+            print(" MQTT conectado")
         except Exception as e:
-            print(f"❌ Error MQTT: {e}")
+            print(f"Error MQTT: {e}")
         
         # Thread para lectura periódica
         self.stop_event = threading.Event()
         self.lock = threading.Lock()
         self.last_successful_read = 0
         
-        print("✅ ESP32 Interface iniciada")
-        print("   Esperando datos de ESP32...")
+        print("ESP32 Interface iniciada")
+        print("Esperando datos de ESP32...")
 
     def read_sensors(self):
         """Leer datos de ESP32 por I2C con timeout"""
@@ -113,7 +113,7 @@ class ESP32Interface:
         except Exception as e:
             # Error I2C - puede ser que ESP32 no esté listo
             if time.time() - self.last_successful_read > 10:
-                print(f"⚠️ Error I2C lectura (más de 10s sin datos): {e}")
+                print(f"Error I2C lectura (más de 10s sin datos): {e}")
             return False
     
     def send_command(self, cmd, value=None):
@@ -129,7 +129,7 @@ class ESP32Interface:
                     self.bus.write_byte(self.I2C_ADDRESS, cmd)
             return True
         except Exception as e:
-            print(f"⚠️ Error enviando comando {chr(cmd)}: {e}")
+            print(f" Error enviando comando {chr(cmd)}: {e}")
             return False
     
     # ==================== ACTUADORES ====================
@@ -218,7 +218,7 @@ class ESP32Interface:
     
     # ==================== START/STOP ====================
     def start(self):
-        print("✅ ESP32 Interface iniciada")
+        print("ESP32 Interface iniciada")
         threading.Thread(target=self.sensor_loop, daemon=True).start()
     
     def stop(self):
