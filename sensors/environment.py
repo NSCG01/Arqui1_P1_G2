@@ -1,143 +1,190 @@
-import RPi.GPIO as GPIO
 import threading
 import time
 import json
 import paho.mqtt.client as mqtt
-import Adafruit_DHT
+from rpi_lcd import LCD
 
 
-class Environment:
-
-    # ---------------- CONFIG ----------------
-    DHT_SENSOR = Adafruit_DHT.DHT11
-    DHT_PIN = 1
-    SOIL_PIN = 1
+class Display:
 
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883
+    TOPIC_MSG = "nave/control/mensajes"
 
-    TOPIC_TEMP = "nave/sensores/temperatura"
-    TOPIC_AMBIENTE = "nave/sensores/ambiente"
-    TOPIC_SOIL = "nave/sensores/humedad"
-    TOPIC_ALERT = "nave/alertas/criticas"
+    def __init__(self, systems):
+        self.systems = systems
 
-    def __init__(self):
+        try:
+            self.lcd = LCD(0x27, 1, 16, 2, True)
+            self.lcd.clear()
+            self.lcd.backlight(True)
+            print("✅ LCD inicializado")
+        except Exception as e:
+            print(f"⚠️ LCD error: {e}")
+            self.lcd = None
 
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
-        GPIO.setup(self.SOIL_PIN, GPIO.IN)
-
-        # MQTT
         self.client = mqtt.Client()
-        self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
-        self.client.loop_start()
+        self.client.on_message = self.on_message
 
-        # Estado
+        try:
+            self.client.connect(self.MQTT_BROKER, self.MQTT_PORT, 60)
+            self.client.subscribe(self.TOPIC_MSG)
+            self.client.loop_start()
+        except Exception as e:
+            print(f"⚠️ Display MQTT error: {e}")
+
         self.stop_event = threading.Event()
 
-        self.temperature = 0
-        self.humidity = 0
-        self.soil = 0
+        self.view_index = 0
+        self.last_message = ""
+        self.message_time = 0
+        self.last_update = 0
+        
+        print("✅ Display inicializado")
 
-        self.prev_alert_state = None
+    def now(self):
+        return time.time()
 
-    # ---------------- TIMESTAMP ----------------
-    def get_timestamp(self):
-        return time.strftime("%Y-%m-%d %H:%M:%S")
+    def on_message(self, client, userdata, msg):
+        try:
+            data = json.loads(msg.payload.decode())
+            self.last_message = data.get("msg", "")
+            print(f"📱 LCD recibe mensaje: {self.last_message}")
+        except Exception:
+            try:
+                self.last_message = msg.payload.decode()
+            except:
+                self.last_message = "MSG ERROR"
 
-    # ---------------- MQTT ----------------
-    def publish(self, topic, payload):
-        self.client.publish(topic, json.dumps(payload))
+        self.message_time = self.now()
 
-    def publish_all(self):
-        ts = self.get_timestamp()
+    def safe_text(self, text):
+        return text if text else ""
 
-        self.publish(self.TOPIC_TEMP, {
-            "value": self.temperature,
-            "timestamp": ts
-        })
+    def display_two_lines(self, line1, line2):
+        if self.lcd is None:
+            print(f"LCD (simulado): {line1[:16]} | {line2[:16]}")
+            return
+            
+        try:
+            self.lcd.clear()
+            self.lcd.text(line1[:16], 1)
+            self.lcd.text(line2[:16], 2)
+            print(f"LCD: {line1[:16]} | {line2[:16]}")
+        except Exception as e:
+            print(f"LCD error: {e}")
 
-        self.publish(self.TOPIC_AMBIENTE, {
-            "value": self.humidity,
-            "timestamp": ts
-        })
+    def scroll_text(self, title, text):
+        text = self.safe_text(text)
 
-        self.publish(self.TOPIC_SOIL, {
-            "value": "DRY" if self.soil else "WET",
-            "raw": int(self.soil),
-            "timestamp": ts
-        })
+        if len(text) <= 16:
+            self.display_two_lines(title, text)
+            return
 
-    def publish_alert(self, alerts):
-        payload = {
-            "type": "ENVIRONMENT",
-            "alerts": alerts,
-            "timestamp": self.get_timestamp()
-        }
-        self.publish(self.TOPIC_ALERT, payload)
+        window = text[:16]
+        self.display_two_lines(title, window)
 
-    # ---------------- ALERTAS ----------------
-    def check_alerts(self):
+        def scroll_step(index=0):
+            if self.stop_event.is_set():
+                return
 
-        alerts = []
+            if index + 16 <= len(text):
+                window = text[index:index+16]
+                self.display_two_lines(title, window)
+                threading.Timer(0.4, lambda: scroll_step(index + 1)).start()
 
-        if self.temperature > 35:
-            alerts.append("HIGH_TEMP")
-        elif self.temperature < 10:
-            alerts.append("LOW_TEMP")
+        scroll_step()
 
-        if self.humidity < 20:
-            alerts.append("LOW_HUM")
-        elif self.humidity > 80:
-            alerts.append("HIGH_HUM")
+    def show_environment(self):
+        """Mostrar datos ambientales en LCD"""
+        try:
+            env = self.systems["env"]
+            text = env.get_env_status()
+            self.display_two_lines("ENVIRONMENT", text)
+        except Exception as e:
+            print(f"ENV error: {e}")
+            self.display_two_lines("ENVIRONMENT", "ERROR")
 
-        return alerts
+    def show_meteor(self):
+        """Mostrar estado del meteorito en LCD"""
+        try:
+            meteor = self.systems["meteor"]
+            text = meteor.get_meteor_status()
+            self.display_two_lines("METEOR", text)
+        except Exception as e:
+            print(f"METEOR error: {e}")
+            self.display_two_lines("METEOR", "ERROR")
 
-    # ---------------- LOOP PRINCIPAL ----------------
-    def loop(self):
+    def show_turret(self):
+        """Mostrar ángulo de la torreta en LCD"""
+        try:
+            turret = self.systems["turret"]
+            angle = turret.get_turret_status()
+            self.display_two_lines("TURRET", f"Angle: {angle}")
+        except Exception as e:
+            print(f"TURRET error: {e}")
+            self.display_two_lines("TURRET", "ERROR")
 
-        while not self.stop_event.is_set():
+    def show_message(self):
+        """Mostrar mensaje recibido por MQTT"""
+        self.scroll_text("MESSAGE", self.last_message)
 
-            # ---- DHT11 ----
-            hum, temp = Adafruit_DHT.read_retry(self.DHT_SENSOR, self.DHT_PIN)
+    def show_emergency(self):
+        """Mostrar pantalla de emergencia"""
+        self.display_two_lines("!!! ALERT !!!", "SYSTEM HALTED")
 
-            if hum is None or temp is None:
-                print("Error leyendo DHT11")
-            else:
-                self.temperature = temp
-                self.humidity = hum
+    def update(self):
+        """Loop de actualización de LCD"""
+        if self.stop_event.is_set():
+            return
 
-            # ---- YL-69 ----
-            self.soil = GPIO.input(self.SOIL_PIN)
+        try:
+            control = self.systems["control"]
+        except:
+            control = None
 
-            # ---- PUBLICAR ----
-            self.publish_all()
+        # Prioridad máxima: emergencia
+        if control and control.is_emergency():
+            self.show_emergency()
+            threading.Timer(1.0, self.update).start()
+            return
 
-            # ---- ALERTAS ----
-            alerts = self.check_alerts()
+        now = self.now()
 
-            if alerts != self.prev_alert_state:
-                if alerts:
-                    print("ALERTAS:", alerts)
-                    self.publish_alert(alerts)
+        # Mensajes prioritarios (5 segundos)
+        if self.last_message and (now - self.message_time < 5):
+            if now - self.last_update >= 5:
+                self.show_message()
+                self.last_update = now
 
-                self.prev_alert_state = alerts
+        # Rotación de vistas cada 3 segundos
+        elif now - self.last_update >= 3:
 
-            self.stop_event.wait(3)
+            if self.view_index == 0:
+                self.show_environment()   # Datos ambientales
+            elif self.view_index == 1:
+                self.show_meteor()        # Distancia meteorito
+            elif self.view_index == 2:
+                self.show_turret()        # Ángulo torreta
 
-    # ---------------- LCD ----------------
-    def get_env_status(self):
-        soil_status = "DRY" if self.soil else "WET"
-        return f"T:{self.temperature}C H:{self.humidity}% S:{soil_status}"
+            self.view_index = (self.view_index + 1) % 3
+            self.last_update = now
 
-    # ---------------- START ----------------
+        threading.Timer(0.5, self.update).start()
+
     def start(self):
-        print("Environment iniciado")
-        threading.Thread(target=self.loop, daemon=True).start()
+        """Iniciar el sistema de visualización"""
+        print("✅ LCD iniciado")
+        self.update()
 
-    # ---------------- STOP ----------------
     def stop(self):
-        print("Environment detenido")
+        """Detener el sistema de visualización"""
+        print("LCD detenido")
         self.stop_event.set()
-        self.client.loop_stop()
-        self.client.disconnect()
+        try:
+            self.client.loop_stop()
+            self.client.disconnect()
+        except:
+            pass
+        if self.lcd:
+            self.lcd.clear()

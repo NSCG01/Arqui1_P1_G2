@@ -7,21 +7,22 @@ from rpi_lcd import LCD
 
 class Display:
 
-    # ---------------- MQTT ----------------
     MQTT_BROKER = "localhost"
     MQTT_PORT = 1883
     TOPIC_MSG = "nave/control/mensajes"
 
     def __init__(self, systems):
-
         self.systems = systems
 
-        # ---------------- LCD ----------------
-        self.lcd = LCD(0x27, 1, 16, 2, True)
-        self.lcd.clear()
-        self.lcd.backlight(True)
+        try:
+            self.lcd = LCD(0x27, 1, 16, 2, True)
+            self.lcd.clear()
+            self.lcd.backlight(True)
+            print("✅ LCD inicializado")
+        except Exception as e:
+            print(f"⚠️ LCD error: {e}")
+            self.lcd = None
 
-        # ---------------- MQTT ----------------
         self.client = mqtt.Client()
         self.client.on_message = self.on_message
 
@@ -30,26 +31,25 @@ class Display:
             self.client.subscribe(self.TOPIC_MSG)
             self.client.loop_start()
         except Exception as e:
-            print(f"MQTT error: {e}")
+            print(f"⚠️ Display MQTT error: {e}")
 
-        # ---------------- ESTADO ----------------
         self.stop_event = threading.Event()
 
         self.view_index = 0
         self.last_message = ""
         self.message_time = 0
-
         self.last_update = 0
+        
+        print("✅ Display inicializado")
 
-    # ---------------- TIMESTAMP ----------------
     def now(self):
         return time.time()
 
-    # ---------------- MQTT RECEIVE ----------------
     def on_message(self, client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode())
             self.last_message = data.get("msg", "")
+            print(f"📱 LCD recibe mensaje: {self.last_message}")
         except Exception:
             try:
                 self.last_message = msg.payload.decode()
@@ -58,28 +58,29 @@ class Display:
 
         self.message_time = self.now()
 
-    # ---------------- UTILIDADES ----------------
     def safe_text(self, text):
         return text if text else ""
 
     def display_two_lines(self, line1, line2):
-
+        if self.lcd is None:
+            print(f"LCD (simulado): {line1[:16]} | {line2[:16]}")
+            return
+            
         try:
             self.lcd.clear()
             self.lcd.text(line1[:16], 1)
             self.lcd.text(line2[:16], 2)
+            print(f"LCD: {line1[:16]} | {line2[:16]}")
         except Exception as e:
             print(f"LCD error: {e}")
 
     def scroll_text(self, title, text):
-
         text = self.safe_text(text)
 
         if len(text) <= 16:
             self.display_two_lines(title, text)
             return
 
-        # scroll dinámico sin sleep
         window = text[:16]
         self.display_two_lines(title, window)
 
@@ -94,7 +95,6 @@ class Display:
 
         scroll_step()
 
-    # ---------------- VISTAS ----------------
     def show_environment(self):
         try:
             env = self.systems["env"]
@@ -102,6 +102,7 @@ class Display:
             self.display_two_lines("ENVIRONMENT", text)
         except Exception as e:
             print(f"ENV error: {e}")
+            self.display_two_lines("ENVIRONMENT", "ERROR")
 
     def show_meteor(self):
         try:
@@ -110,25 +111,24 @@ class Display:
             self.display_two_lines("METEOR", text)
         except Exception as e:
             print(f"METEOR error: {e}")
+            self.display_two_lines("METEOR", "ERROR")
 
     def show_turret(self):
         try:
             turret = self.systems["turret"]
             angle = turret.get_turret_status()
-            self.display_two_lines("TURRET", f"{angle}")
+            self.display_two_lines("TURRET", f"Angle: {angle}")
         except Exception as e:
             print(f"TURRET error: {e}")
+            self.display_two_lines("TURRET", "ERROR")
 
     def show_message(self):
         self.scroll_text("MESSAGE", self.last_message)
 
-    # ---------------- EMERGENCIA ----------------
     def show_emergency(self):
         self.display_two_lines("!!! ALERT !!!", "SYSTEM HALTED")
 
-    # ---------------- LOOP ----------------
     def update(self):
-
         if self.stop_event.is_set():
             return
 
@@ -156,10 +156,8 @@ class Display:
 
             if self.view_index == 0:
                 self.show_environment()
-
             elif self.view_index == 1:
                 self.show_meteor()
-
             elif self.view_index == 2:
                 self.show_turret()
 
@@ -168,15 +166,17 @@ class Display:
 
         threading.Timer(0.5, self.update).start()
 
-    # ---------------- START ----------------
     def start(self):
-        print(" LCD iniciado")
+        print("✅ LCD iniciado")
         self.update()
 
-    # ---------------- STOP ----------------
     def stop(self):
-        print(" LCD detenido")
+        print("LCD detenido")
         self.stop_event.set()
-        self.client.loop_stop()
-        self.client.disconnect()
-        self.lcd.clear()
+        try:
+            self.client.loop_stop()
+            self.client.disconnect()
+        except:
+            pass
+        if self.lcd:
+            self.lcd.clear()
