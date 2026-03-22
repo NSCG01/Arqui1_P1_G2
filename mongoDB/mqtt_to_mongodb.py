@@ -19,12 +19,12 @@ class MQTTtoMongoDB:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         
-        print(f"🔗 Conectando a MQTT broker: {mqtt_broker}:{mqtt_port}")
+        print(f"Conectando a MQTT broker: {mqtt_broker}:{mqtt_port}")
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback cuando se conecta a MQTT"""
         if rc == 0:
-            print("✅ Conectado a MQTT broker")
+            print("Conectado a MQTT broker")
             
             # Suscribirse a todos los tópicos de sensores
             self.client.subscribe("nave/sensores/#")        # Sensores
@@ -32,9 +32,9 @@ class MQTTtoMongoDB:
             self.client.subscribe("nave/comandos/#")        # Comandos
             self.client.subscribe("nave/mensajes/#")        # Mensajes
             
-            print("📡 Suscrito a tópicos MQTT")
+            print("Suscrito a tópicos MQTT")
         else:
-            print(f"❌ Error conexión MQTT: {rc}")
+            print(f"Error conexión MQTT: {rc}")
     
     def on_message(self, client, userdata, msg):
         """Callback cuando recibe un mensaje MQTT"""
@@ -42,7 +42,7 @@ class MQTTtoMongoDB:
             topic = msg.topic
             payload = json.loads(msg.payload.decode())
             
-            print(f"📨 MQTT recibido: {topic}")
+            print(f"MQTT recibido: {topic}")
             
             # Enrutar según el tipo de tópico
             if "sensores" in topic:
@@ -55,9 +55,9 @@ class MQTTtoMongoDB:
                 self._save_message(topic, payload)
         
         except json.JSONDecodeError:
-            print(f"⚠️ Error decodificando JSON: {msg.payload}")
+            print(f"Error decodificando JSON: {msg.payload}")
         except Exception as e:
-            print(f"❌ Error procesando mensaje: {e}")
+            print(f"Error procesando mensaje: {e}")
     
     def _save_sensor_reading(self, topic, payload):
         """Guarda lecturas de sensores"""
@@ -111,15 +111,15 @@ class MQTTtoMongoDB:
         try:
             self.client.connect(self.mqtt_broker, self.mqtt_port, 60)
             self.client.loop_start()
-            print("🚀 Listener MQTT iniciado")
+            print("Listener MQTT iniciado")
         except Exception as e:
-            print(f"❌ Error iniciando listener MQTT: {e}")
+            print(f"Error iniciando listener MQTT: {e}")
     
     def stop(self):
         """Detiene el listener MQTT"""
         self.client.loop_stop()
         self.client.disconnect()
-        print("🛑 Listener MQTT detenido")
+        print("Listener MQTT detenido")
 
 
 # Usar como servicio independiente
@@ -134,4 +134,4 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         mqtt_listener.stop()
-        print("✅ Listener MQTT cerrado correctamente")
+        print("Listener MQTT cerrado correctamente")

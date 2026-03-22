@@ -19,9 +19,9 @@ def connect_mqtt():
     """Conecta a MQTT"""
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            print("✅ Conectado a MQTT broker")
+            print("Conectado a MQTT broker")
         else:
-            print(f"❌ Error conexión: {rc}")
+            print(f"Error conexión: {rc}")
     
     client.on_connect = on_connect
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
@@ -35,7 +35,7 @@ def send_environment_data():
         "soil_status": "WET" if random.random() > 0.5 else "DRY"
     }
     client.publish("nave/sensores/temperatura", json.dumps(data))
-    print(f"📤 Ambiente: {data}")
+    print(f"Ambiente: {data}")
 
 def send_fire_data():
     """Envía datos de detector de fuego"""
@@ -44,7 +44,7 @@ def send_fire_data():
         "status": "ALARMA" if random.random() < 0.05 else "NORMAL"
     }
     client.publish("nave/sensores/fuego", json.dumps(data))
-    print(f"🔥 Fuego: {data}")
+    print(f"Fuego: {data}")
 
 def send_meteor_data():
     """Envía datos de detector de meteoros"""
@@ -54,7 +54,7 @@ def send_meteor_data():
         "velocity": round(random.uniform(20, 72), 2)
     }
     client.publish("nave/sensores/meteoros", json.dumps(data))
-    print(f"☄️ Meteoro: {data}")
+    print(f"Meteoro: {data}")
 
 def send_turret_data():
     """Envía datos de torreta"""
@@ -65,7 +65,7 @@ def send_turret_data():
         "rotation_speed": round(random.uniform(0, 10), 2)
     }
     client.publish("nave/sensores/torreta", json.dumps(data))
-    print(f"🎯 Torreta: {data}")
+    print(f"Torreta: {data}")
 
 def send_gate_data():
     """Envía datos de puerta"""
@@ -76,7 +76,7 @@ def send_gate_data():
         "is_moving": state in ["opening", "closing"]
     }
     client.publish("nave/sensores/puerta", json.dumps(data))
-    print(f"🚪 Puerta: {data}")
+    print(f"Puerta: {data}")
 
 def send_alert_data():
     """Envía alertas"""
@@ -87,11 +87,11 @@ def send_alert_data():
     ]
     alert = random.choice(alert_types)
     client.publish("nave/alertas/criticas", json.dumps(alert))
-    print(f"⚠️ Alerta: {alert}")
+    print(f"Alerta: {alert}")
 
 def main():
     """Loop principal"""
-    print("🚀 Iniciando prueba de MQTT...")
+    print("Iniciando prueba de MQTT...")
     connect_mqtt()
     
     time.sleep(1)  # Espera a conectar
@@ -125,7 +125,7 @@ def main():
             time.sleep(1)  # Espera antes del próximo ciclo
     
     except KeyboardInterrupt:
-        print("\n\n✅ Prueba finalizada")
+        print("\n\nPrueba finalizada")
         client.loop_stop()
         client.disconnect()
 

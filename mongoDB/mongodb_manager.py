@@ -50,7 +50,7 @@ class MongoDBManager:
         }
         
         result = self.db.sensor_readings.insert_one(document)
-        print(f"📊 {sensor_type}: Guardado")
+        print(f"{sensor_type}: Guardado")
         return result.inserted_id
     
     # ========== EVENTS ==========
@@ -64,7 +64,7 @@ class MongoDBManager:
         }
         
         result = self.db.events.insert_one(document)
-        print(f"⚠️ Evento: {event_type}")
+        print(f"Evento: {event_type}")
         return result.inserted_id
     
     # ========== COMMANDS ==========
@@ -78,7 +78,7 @@ class MongoDBManager:
         }
         
         result = self.db.commands.insert_one(document)
-        print(f"🎮 Comando: {command_type}")
+        print(f"Comando: {command_type}")
         return result.inserted_id
     
     # ========== MESSAGES ==========
@@ -92,7 +92,7 @@ class MongoDBManager:
         }
         
         result = self.db.messages.insert_one(document)
-        print(f"💬 Mensaje: {sender}")
+        print(f"Mensaje: {sender}")
         return result.inserted_id
     
     def close(self):

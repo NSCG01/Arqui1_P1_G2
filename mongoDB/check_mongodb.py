@@ -14,11 +14,11 @@ try:
     client = MongoClient(MONGODB_URI)
     db = client["Arqui1_G2"]
     
-    print("\n📊 === DATOS EN MONGODB ===\n")
+    print("\n === DATOS EN MONGODB ===\n")
     
     # Sensor readings
     count = db.sensor_readings.count_documents({})
-    print(f"📈 sensor_readings: {count} documentos")
+    print(f"sensor_readings: {count} documentos")
     
     last = db.sensor_readings.find_one({}, sort=[("_id", -1)])
     if last:
@@ -26,7 +26,7 @@ try:
     
     # Events
     count = db.events.count_documents({})
-    print(f"⚠️ events: {count} documentos")
+    print(f"events: {count} documentos")
     
     last = db.events.find_one({}, sort=[("_id", -1)])
     if last:
@@ -34,7 +34,7 @@ try:
     
     # Commands
     count = db.commands.count_documents({})
-    print(f"🎮 commands: {count} documentos")
+    print(f"commands: {count} documentos")
     
     last = db.commands.find_one({}, sort=[("_id", -1)])
     if last:
@@ -42,11 +42,11 @@ try:
     
     # Messages
     count = db.messages.count_documents({})
-    print(f"💬 messages: {count} documentos")
+    print(f"messages: {count} documentos")
     
     last = db.messages.find_one({}, sort=[("_id", -1)])
     if last:
         print(f"   Último: {last}\n")
     
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f"Error: {e}")
